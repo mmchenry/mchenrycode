@@ -52,7 +52,7 @@ tolerance   = 1.e4; % Specifies the degree of smoothing of the peripheral shape 
 numPts_AP   = 200;  % Number of points along the antero-posterior axis
 numPts_circ = 200;  % Number of points around the circumference of a cross-section of the body
 
-rho_tissue  = 1000; % Density of tissue (kg m^-3)
+rho_body    = 1000; % Density of whole body (kg m^-3)
 rho_02      = 1;    % Density of oxygen (kg m^-3)
 rho_water   = 1000; % Density of water (kg m^-3)
 Vbladder    = 1e-10;% Swim bladder volume (in m^3)
@@ -226,24 +226,20 @@ if calc_metrics
         mLat  = [morph.lateralLand.x' morph.lateralLand.y'];
         mDor  = [morph.dorsalLand.x'  morph.dorsalLand.y'];
         
-        % Extract position of swim bladder (sb) & rostrum (in pix)
-        sb_y    = mean(morph.swimBladder.x);
-        sb_z    = mean(morph.swimBladder.y);
-        rostD   = [xD(1) yD(1)];
-        rostL   = [xL(1) yL(1)];
+        % Extract position of swim bladder (sb)
+        sb_y_pix = mean(morph.swimBladder.x);
+        sb_z_pix = mean(morph.swimBladder.y);
         
         % Calculate dimensions of body (SI units)
         w   = abs(yL-yR) .* calDors;
         c   = mean([yD;yV],1) .* calLat;
         h   = abs(yD-yV) .* calLat;
-        s   = xD - xD(1) .* calDors;
+        s   = (xD - xD(1)) .* calDors;
         
         % Calculate position of swim bladder
-        sb_y = (sb_y - s(1))c
-        s = (s - s(1));
-        h = h .* calLat;
-        w = w .* calDors;
-        c = c .* calLat;
+        sb_y = (sb_y_pix - xL(1)).* calLat;
+        sb_z = (sb_z_pix - yL(1)).* calLat;
+        sb_x = 0;
         
         % Load grayscale images        
         imDor	  = imread([zBaseM filesep 'to_be_analyzed' filesep ...
@@ -259,42 +255,43 @@ if calc_metrics
         
         subplot(3,1,1)
         imshow(imDor); hold on
-        plot(xL,yL,'r',xR,yR,'b',mDor(:,1),mDor(:,2),'go-',...
-             rostL(1),rostL(2),'+r')
+        plot(xL,yL,'r',xR,yR,'b',mDor(:,1),mDor(:,2),'go-')
         legend('left','right')
         
         subplot(3,1,2)
         imshow(imLat); hold on
-        plot(xD,yD,'r',xV,yV,'b',sb_y,sb_z,'om',mLat(:,1),mLat(:,2),'go-',...
-             rostD(1),rostD(2),'r+')
+        plot(xD,yD,'r',xV,yV,'b',sb_y_pix,sb_z_pix,'om',...
+             mLat(:,1),mLat(:,2),'go-')
         legend('dorsal','ventral','bladder')
         
         warning on
         
-        clear imDor imLat
+        clear imDor imLat sb_y_pix sb_z_pix
         
-        
-        
-        
-        
-        
-        
-        
-        
-        
-           
+        % Plot data
+        subplot(3,1,3)
+        plot(s,w,'b',s,h,'r',sb_y,sb_z,'ok')
+        xlabel(['Body position (' units ')'])
+        ylabel(['Length (' units ')'])
+        legend('w','h','sb')
+                   
         % Calculate trunk step size (check equal steps)
         ds = mean(diff(s));
         if (sum(find(abs(diff(s) - ds) > .001*ds)))
             error('trunk length is not equally spaced');
         end
         
-        % Calc segment and total volume
+        % Calc segment, total vol of body, vol of tissue
         dV      = pi .* (w./2) .* (h./2) .* ds;
-        Vtot    = sum(dV);
+        Vbody   = sum(dV);
         Vtissue = Vtot - Vbladder;
+        
+        % Calc mass of the sb, body, tisssue
+        Msb     = rho_02 * Vbladder;
+        Mbody   = rho_body * Vbody;
+        Mtissue = Mbody-Msb;
 
-        % Calculate COV in each dimension
+        % Calculate COV
         COV_z = sum( c.*dV );
         COV_y = sum( s.*dV );
         COV_x = 0;
@@ -302,27 +299,39 @@ if calc_metrics
         
         clear COV_x COV_y COV_z
         
-        % Calculate COM (neglecting the bladder)
-        COM_z = sum( rho_tissue.*c.*dV );
-        COM_y = sum( rho_tissue.*s.*dV );
+        % Calculate mass/position product for COM (neglecting the bladder)
+        COM_z = sum( c.*rho_tissue.*dV );
+        COM_y = sum( s.*rho_tissue.*dV );
         COM_x = 0;
         %M     = V .* rho_tissue;
         
-        % Subtract swim bladder
-        COM_z = COM_z - 1;
-        COM_y = COM_y - 1;
-        COM_x = 0;
+        % Subtract tissue within the volume of the swim bladder
+        COM_z = COM_z - (rho_tissue*sb_z*vBladder);
+        COM_y = COM_y - (rho_tissue*sb_y*vBladder);
+        
+        % Add mass/position product of swim bladder
+        COM_z = COM_z + (sb_z*Msb);
+        COM_y = COM_y + (sb_y*Msb);
+        
+        % Calculate COM from mass/position product
+        COM = [COM_x COM_y COM_z]./Mbody;
+        
+        clear COM_x COM_y COM_z
         
         
         % Store metrics data in m structure
-        m.length       = max(s);
-        m.s            = s .* calK; %body position
-        m.h            = h .* calK; %height of meat (dist from dorsal to ventral margins)
-        m.w            = w .* calK; %width of meat (dist between left and right margins)
-        m.c            = c .* calK; %center of meat in verticle dimension
-        
-        m.V            = dV;        %volume at each body segment
-        m.Vtot         = V;         %total body volume
+        m.s     = s;        % body position
+        m.h     = h;        % height of meat (dist from dorsal to ventral margins)
+        m.w     = w;        % width of meat (dist between left and right margins)
+        m.c     = c;        % center of meat in verticle dimension
+        m.dV    = dV;       % volume at each body segment
+        m.Vbody = Vbody;    % total body volume
+        m.Vtissue = Vtissue;% Volume of the tissue
+        m.Mbody = Mbody;    % Mass of the body
+        m.Mtissue = Mtissue;% Mass of the tissue
+        m.Msb   = Msb;      % Mass of swim bladder
+        m.COV   = COV;      % Center of volume in xyz coordinates
+        m.COM   = COM;      % Center of mass in xyz coordinates
         
         % Save
         save([zBaseM filesep 'data_metrics' filesep fName],'m')
@@ -333,7 +342,8 @@ if calc_metrics
             disp(['    Done ' num2str(i) ' of ' num2str(length(files))])
         end
         
-        clear fName calK s h w c m
+        clear fName calK s h w c m COV COM dV Vbody Vtissue Mbody Mtissue 
+        clear Msb
     end
 end
 
@@ -409,11 +419,7 @@ if visualize
 end
 
 
-
-%%================================FUNCTIONS=============================================================
-
-
-
+%% ==========================FUNCTIONS===============================
 
 function morph = givePeriphery(morph,biDor,biLat_bod)
 warning off
