@@ -20,8 +20,8 @@ function zMorphometrics(fileName, batchMode)
 
 %% Specify which parts of the code to run
 
-get_raw         = 0;
-calc_metrics    = 1;
+get_raw         = 1;
+calc_metrics    = 0;
 calc_3d         = 0;
 visualize       = 0;
 
@@ -31,13 +31,14 @@ end
 
 %% Directories
 
-zBaseM = '/Volumes/workgroup/m_file_library/morphometrics/zMorphometrics';
+zBaseM = '/Users/Bill/Desktop/zMorphometrics_data';
 %m_fileDir = [zBaseM filesep 'm_files'];
-m_fileDir = '/Volumes/Docs/Projects/Relative velocity/zKinematics';
+m_fileDir = '/Users/Bill/Desktop/zMorphometrics';
 
 if (nargin < 1) && ~batchMode
     [fileName,pName,fIndex]= uigetfile({'*.tif';'*.TIF'},'Choose image');
-    
+    cd(pName);
+    disp(fileName);
     fileName = fileName(1:end-4);
     if ~fIndex
         return
@@ -95,14 +96,24 @@ if get_raw
             imgCal    = imread([zBaseM filesep 'to_be_analyzed' filesep ...
             'calibration' filesep fName '.tif'],'tif');
             
+            
+            format short g;
+            prompt = {'lat num:','lat den:','dors num:','dors den:','units:'};
+            dlgtitle = 'enter calibration constant';
+
+            answer = inputdlg(prompt,dlgtitle,1,{'1','1','1','1','mm'});
+            cal.lat.const   = str2num(answer{1}) / str2num(answer{2});
+            cal.dors.const  = str2num(answer{3}) / str2num(answer{4});
+            cal.units       = answer{5};
+            
             % Prompt for calibration constants
-            answer = inputdlg({'Lateral view constant (units/pix)',...
-                               'Dorsal view constant (units/pix)',...
-                               'units'},'Calibration constant',...
-                               1,{'1','1','cm'});
-            cal.lat.const   = str2num(answer{1});
-            cal.dors.const  = str2num(answer{2});
-            cal.units       = answer{3};
+            %answer = inputdlg({'Lateral view constant (units/pix)',...
+            %                   'Dorsal view constant (units/pix)',...
+            %                   'units'},'Calibration constant',...
+            %                   1,{'1','1','cm'});
+            %cal.lat.const   = str2num(answer{1});
+            %cal.dors.const  = str2num(answer{2});
+            %cal.units       = answer{3};
             
             % This code interactively determines calbration constant
             %calData = runCalibrations(imgCal,1);
@@ -183,6 +194,7 @@ if get_raw
     end
 end
 
+disp(fileName); %so I know the one I just did
 %% CALC METRICS
 % Uses the raw data collected to calculate the smoothed shape of the body.
 % This will run a batch, if requested
@@ -284,7 +296,7 @@ if calc_metrics
         % Calc segment, total vol of body, vol of tissue
         dV      = pi .* (w./2) .* (h./2) .* ds;
         Vbody   = sum(dV);
-        Vtissue = Vtot - Vbladder;
+        Vtissue = Vbody - Vbladder;  %Vtot was subsituted with Vbody
         
         % Calc mass of the sb, body, tisssue
         Msb     = rho_02 * Vbladder;
@@ -295,7 +307,7 @@ if calc_metrics
         COV_z = sum( c.*dV );
         COV_y = sum( s.*dV );
         COV_x = 0;
-        COV   = [COV_x COV_y COV_z] ./ Vtot;
+        COV   = [COV_x COV_y COV_z] ./ Vbody;  %Vbody was Vtot
         
         clear COV_x COV_y COV_z
         
