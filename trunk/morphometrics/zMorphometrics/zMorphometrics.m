@@ -20,10 +20,10 @@ function zMorphometrics(fileName, batchMode)
 
 %% Specify which parts of the code to run
 
-get_raw         = 1;
+get_raw         = 0;
 calc_metrics    = 0;
 calc_3d         = 0;
-visualize       = 0;
+visualize       = 1;
 
 if nargin < 2
     batchMode = 0;
@@ -53,11 +53,19 @@ tolerance   = 1.e4; % Specifies the degree of smoothing of the peripheral shape 
 numPts_AP   = 200;  % Number of points along the antero-posterior axis
 numPts_circ = 200;  % Number of points around the circumference of a cross-section of the body
 
-rho_body    = 1000; % Density of whole body (kg m^-3)
+%rho_body    = 1000; % Density of whole body (kg m^-3)
 rho_02      = 1;    % Density of oxygen (kg m^-3)
-rho_water   = 1000; % Density of water (kg m^-3)
-Vbladder    = 1e-10;% Swim bladder volume (in m^3)
+rho_water   = 998; % Density of water (kg m^-3) (was 1000)
+%Vbladder    = 1e-10;% Swim bladder volume (in m^3)
 
+%import rho_body amd Vbladder from real data
+load('/Users/Bill/Desktop/t_v/p_data.mat'); %load mat file with all data. 
+larva_num = str2num(fileName(end-1:end)); %get larva number from filename
+
+rho_body = p(larva_num) * 1000; %get rho_body (g/mL) and convert to kg m^-3
+Vbladder = bv(larva_num) * 1e-9; %get swim bladder volume in mm^3 and 
+                                 %convert to m^3
+clear FNAME a ah bv p p_e;
 
 %% GET RAW
 % Prompts user to calibrate and pick off landmarks from grayscale images, 
@@ -312,14 +320,19 @@ if calc_metrics
         clear COV_x COV_y COV_z
         
         % Calculate mass/position product for COM (neglecting the bladder)
+        
+            %I assume rho_tissue is the density of tissue excluding bladder
+        rho_tissue = Mtissue / Vtissue;
+        
+        
         COM_z = sum( c.*rho_tissue.*dV );
         COM_y = sum( s.*rho_tissue.*dV );
         COM_x = 0;
         %M     = V .* rho_tissue;
         
         % Subtract tissue within the volume of the swim bladder
-        COM_z = COM_z - (rho_tissue*sb_z*vBladder);
-        COM_y = COM_y - (rho_tissue*sb_y*vBladder);
+        COM_z = COM_z - (rho_tissue*sb_z*Vbladder); %vBladder changed to Vbladder
+        COM_y = COM_y - (rho_tissue*sb_y*Vbladder);
         
         % Add mass/position product of swim bladder
         COM_z = COM_z + (sb_z*Msb);
