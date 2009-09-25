@@ -3,7 +3,6 @@ function zMorphometrics(fileName, batchMode)
 % views.  This verison of the code assumes the morphology is the body of a
 % larval fish.
 %
-% batchmode -   (1 or 0) dictates whether to run on all individuals
 %
 % To conduct the aquistion, 5 grayscale images (alhaving the same filename)
 % of the same larva must be saved in the following directories:
@@ -15,25 +14,23 @@ function zMorphometrics(fileName, batchMode)
 %   in "lateral grayscale"      - Image of the larva from lateral view.
 %
 % These directories must be saved in zBaseM, defined below
-%
-% Test message
+
 
 %% Specify which parts of the code to run
 
-get_raw         = 0;
-calc_metrics    = 0;
-calc_3d         = 0;
-visualize       = 1;
-
-if nargin < 2
-    batchMode = 0;
-end
+get_raw         = 0; % Runs interactive mode for acquiring body periphery
+calc_metrics    = 0; % Processes raw data to calc body properties
+calc_3d         = 0; % Develop 3d shape of body from data_metrics
+visualize3d     = 0; % Visualizes 3d shape
+visualizeData   = 1; % Graphs data from data_metrics
 
 %% Directories
 
-zBaseM = '/Users/Bill/Desktop/zMorphometrics_data';
+%zBaseM = '/Users/Bill/Desktop/zMorphometrics_data';
+zBaseM = '/Volumes/workgroup/relative_velocity/zMorphometrics_data';
 %m_fileDir = [zBaseM filesep 'm_files'];
-m_fileDir = '/Users/Bill/Desktop/zMorphometrics';
+%m_fileDir = '/Users/Bill/Desktop/zMorphometrics';
+m_fileDir = '/Volumes/Docs/Projects/Relative velocity/zMorphometrics';
 
 if (nargin < 1) && ~batchMode
     [fileName,pName,fIndex]= uigetfile({'*.tif';'*.TIF'},'Choose image');
@@ -49,23 +46,18 @@ end
 
 %% Parameter values
 
+visProfiles = 0;    % Shows traced peripheries on images of larvae
+
 tolerance   = 1.e4; % Specifies the degree of smoothing of the peripheral shape of the body
 numPts_AP   = 200;  % Number of points along the antero-posterior axis
 numPts_circ = 200;  % Number of points around the circumference of a cross-section of the body
 
-%rho_body    = 1000; % Density of whole body (kg m^-3)
-rho_02      = 1;    % Density of oxygen (kg m^-3)
-rho_water   = 998; % Density of water (kg m^-3) (was 1000)
-%Vbladder    = 1e-10;% Swim bladder volume (in m^3)
+rho_02      = 1;     % Density of oxygen (kg m^-3)
+rho_water   = 998;   % Density of water (kg m^-3)  
 
-%import rho_body amd Vbladder from real data
-load('/Users/Bill/Desktop/t_v/p_data.mat'); %load mat file with all data. 
-larva_num = str2num(fileName(end-1:end)); %get larva number from filename
+% Load b, the structure containing body density and swim bladder volume 
+load([zBaseM filesep 'body_density_data.mat'])
 
-rho_body = p(larva_num) * 1000; %get rho_body (g/mL) and convert to kg m^-3
-Vbladder = bv(larva_num) * 1e-9; %get swim bladder volume in mm^3 and 
-                                 %convert to m^3
-clear FNAME a ah bv p p_e;
 
 %% GET RAW
 % Prompts user to calibrate and pick off landmarks from grayscale images, 
@@ -203,25 +195,36 @@ if get_raw
 end
 
 disp(fileName); %so I know the one I just did
+
 %% CALC METRICS
 % Uses the raw data collected to calculate the smoothed shape of the body.
-% This will run a batch, if requested
+% This will run in batch mode.
 
 if calc_metrics
     
-    % Define files
-    if batchMode
-        disp(' '); disp('Running calc_metrics . . . ');
-        files = dir([zBaseM filesep 'data_raw' filesep '*.mat']);
-    else
-        files(1).name = fileName;
+    % Create figure window
+    if visProfiles
+        hF = figure;
+        set(hF,'DoubleBuffer','on')
     end
+    
+    % Define files
+    disp(' '); disp('Running calc_metrics . . . ');
+    files = dir([zBaseM filesep 'data_raw' filesep '*.mat']);
     
     % Loop through files
     for i = 1:length(files)
-        % Define filename
-        fName = files(i).name;
         
+        % Define filename, larva number
+        fName   = files(i).name(1:end-4);
+        larva   = str2num(fName(end-1:end)); 
+        
+        % Get rho_body (g/mL) and convert to kg m^-3
+        rho_body = b.rho_body(larva) * 1000; 
+        
+        % Get swim bladder volume in mm^3 and convert to m^3 
+        Vbladder = b.sb_vol(larva) * 1e-9;   
+                                          
         % Load data
         load([zBaseM filesep 'data_cal' filesep fName]);
         load([zBaseM filesep 'data_raw' filesep fName]);
@@ -251,10 +254,10 @@ if calc_metrics
         sb_z_pix = mean(morph.swimBladder.y);
         
         % Calculate dimensions of body (SI units)
-        w   = abs(yL-yR) .* calDors;
-        c   = mean([yD;yV],1) .* calLat;
-        h   = abs(yD-yV) .* calLat;
-        s   = (xD - xD(1)) .* calDors;
+        w   = abs(yL-yR) .* calDors * 1e-3;
+        c   = mean([yD;yV],1) .* calLat * 1e-3;
+        h   = abs(yD-yV) .* calLat * 1e-3;
+        s   = (xD - xD(1)) .* calDors * 1e-3;
         
         % Calculate position of swim bladder
         sb_y = (sb_y_pix - xL(1)).* calLat;
@@ -269,32 +272,38 @@ if calc_metrics
         
         clear morph
         
-        % Display peripheral shape on grayscale images
-        warning off
-        figure;
-        
-        subplot(3,1,1)
-        imshow(imDor); hold on
-        plot(xL,yL,'r',xR,yR,'b',mDor(:,1),mDor(:,2),'go-')
-        legend('left','right')
-        
-        subplot(3,1,2)
-        imshow(imLat); hold on
-        plot(xD,yD,'r',xV,yV,'b',sb_y_pix,sb_z_pix,'om',...
-             mLat(:,1),mLat(:,2),'go-')
-        legend('dorsal','ventral','bladder')
-        
-        warning on
-        
-        clear imDor imLat sb_y_pix sb_z_pix
-        
-        % Plot data
-        subplot(3,1,3)
-        plot(s,w,'b',s,h,'r',sb_y,sb_z,'ok')
-        xlabel(['Body position (' units ')'])
-        ylabel(['Length (' units ')'])
-        legend('w','h','sb')
-                   
+        if visProfiles
+            % Display peripheral shape on grayscale images
+            warning off 
+            
+            subplot(3,1,1)
+            imshow(imDor); hold on
+            plot(xL,yL,'r',xR,yR,'b',mDor(:,1),mDor(:,2),'go-')
+            %legend('left','right')
+            title(fName)
+            hold off
+            
+            subplot(3,1,2)
+            imshow(imLat); hold on
+            plot(xD,yD,'r',xV,yV,'b',sb_y_pix,sb_z_pix,'om',...
+                mLat(:,1),mLat(:,2),'go-')
+            %legend('dorsal','ventral','bladder')
+            hold off
+            
+            warning on
+            
+            clear imDor imLat sb_y_pix sb_z_pix
+            
+            % Plot data
+            subplot(3,1,3)
+            plot(s,w,'b',s,h,'r',sb_y,sb_z,'ok')
+            xlabel(['Body position (' units ')'])
+            ylabel(['Length (' units ')'])
+            %legend('w','h','sb')
+            
+            disp('Press return to continue')
+            pause
+        end
         % Calculate trunk step size (check equal steps)
         ds = mean(diff(s));
         if (sum(find(abs(diff(s) - ds) > .001*ds)))
@@ -310,6 +319,7 @@ if calc_metrics
         Msb     = rho_02 * Vbladder;
         Mbody   = rho_body * Vbody;
         Mtissue = Mbody-Msb;
+        rho_tissue = Mtissue / Vtissue;
 
         % Calculate COV
         COV_z = sum( c.*dV );
@@ -343,32 +353,56 @@ if calc_metrics
         
         clear COM_x COM_y COM_z
         
-        
         % Store metrics data in m structure
         m.s     = s;        % body position
-        m.h     = h;        % height of meat (dist from dorsal to ventral margins)
-        m.w     = w;        % width of meat (dist between left and right margins)
-        m.c     = c;        % center of meat in verticle dimension
+        m.h     = h;        % height of tissue (dist from dorsal to ventral margins)
+        m.w     = w;        % width of tissue (dist between left and right margins)
+        m.c     = c;        % center of tissue in verticle dimension
         m.dV    = dV;       % volume at each body segment
-        m.Vbody = Vbody;    % total body volume
-        m.Vtissue = Vtissue;% Volume of the tissue
-        m.Mbody = Mbody;    % Mass of the body
-        m.Mtissue = Mtissue;% Mass of the tissue
-        m.Msb   = Msb;      % Mass of swim bladder
-        m.COV   = COV;      % Center of volume in xyz coordinates
-        m.COM   = COM;      % Center of mass in xyz coordinates
         
-        % Save
+        m.info  = {'s: body position' 'h: height of tissue' ...
+                   'w: width of tissue' 'c: verticle center of tissue' ...
+                   'dV: volume at each body segment'};
+                   
+        
+        % Store pooled metrics
+        mP.larvaNum(i,1)= larva;           % Larva number
+        mP.age_hr(i,1)  = b.age_hr(larva); % Larva age (hrs)
+        mP.rho_body(i,1)= rho_body; % Body density 
+        mP.sb_vol(i,1)  = Vbladder; % Swim bladder volume
+        mP.units = b.units;
+        
+        mP.rho_tissue(i,1) = rho_tissue; % Tissue density
+        mP.Vbody(i,1)   = Vbody;    % Total body volume
+        mP.Vtissue(i,1) = Vtissue;  % Volume of the tissue
+        mP.Mbody(i,1)   = Mbody;    % Mass of the body
+        mP.Mtissue(i,1) = Mtissue;  % Mass of the tissue
+        mP.Msb(i,1)     = Msb;      % Mass of swim bladder
+        mP.COV(i,:)     = COV;      % Center of volume in xyz coordinates
+        mP.COM(i,:)     = COM;      % Center of mass in xyz coordinates
+        
+        mP.info = {'Vbody: Total vol of body' 'Vtissue: Total vol of tissue' ...
+                   'Msb: Mass of swim bladder' 'COV: Center of volume' ...
+                   'COM: Center of mass'};
+        
+        % Save individual data
         save([zBaseM filesep 'data_metrics' filesep fName],'m')
         
         % Update status
-        if batchMode
-            disp(' ');
-            disp(['    Done ' num2str(i) ' of ' num2str(length(files))])
-        end
+        disp(' ');
+        disp(['    Done ' num2str(i) ' of ' num2str(length(files))])
         
         clear fName calK s h w c m COV COM dV Vbody Vtissue Mbody Mtissue 
-        clear Msb
+        clear Msb larva rho_tissue
+    end
+    
+    % Save pooled data
+    save([zBaseM filesep 'body_metrics'],'mP')
+    
+    % Close figure window
+    if visProfiles
+        close
+        clear hF 
     end
 end
 
@@ -422,10 +456,10 @@ if calc_3d
     end
 end
 
-%% VISUALIZE
+%% VISUALIZE 3D
 % Visualize the three-dimensional shape of the body:
 
-if visualize
+if visualize3d
     
     % Check for batch mode
     if batchMode
@@ -443,8 +477,56 @@ if visualize
     
 end
 
+%% Visualize data
 
-%% ==========================FUNCTIONS===============================
+if visualizeData
+    
+    % Load pooled data, mP
+    load([zBaseM filesep 'body_metrics'])
+    age = mP.age_hr./24;
+    idx = mP.sb_vol==0;
+    
+    figure;
+
+    subplot(3,1,1)
+    h1 = plot(age(idx),mP.sb_vol(idx),'ko');
+    hold on
+    set(h1,'MarkerFaceColor','k')
+    h2 = plot(age(~idx),mP.sb_vol(~idx),'ko');
+    ylabel('Swim bladder volume (m^3)')
+    hold off
+    
+    subplot(3,1,2)
+    h1 = plot(age(idx),mP.Vbody(idx),'ko');
+    hold on
+    set(h1,'MarkerFaceColor','k')
+    h2 = plot(age(~idx),mP.Vbody(~idx),'ko');
+    ylabel('Body volume (m^3)')
+    
+    h3 = plot(age(idx),mP.Vtissue(idx),'ro');
+    hold on
+    %set(h,'MarkerFaceColor','b')
+    h4 = plot(age(~idx),mP.Vtissue(~idx),'ro');
+    ylabel('Volume (m^3)')    
+    hold off
+    legend([h2;h3],{'Body' 'Tissue'})
+    
+    subplot(3,1,3)
+    h1 = plot(age(idx),mP.rho_body(idx),'ko');
+    hold on
+    set(h1,'MarkerFaceColor','k')
+    h2 = plot(age(~idx),mP.rho_body(~idx),'ko');
+    h3 = plot(age,mP.rho_tissue,'r+');
+    legend([h2;h3],{'Body' 'Tissue'})
+    ylabel('Density (g/ml)')
+    hold off
+    
+end
+
+
+
+%% FUNCTIONS ======================
+
 
 function morph = givePeriphery(morph,biDor,biLat_bod)
 warning off
@@ -598,7 +680,6 @@ end
 function [s,h,w,c] = organizeData(morph,numPts,tolerance)
 % Use smoothing spline for each periphery
 
-
 function [dV,V] = calcVolume(s,h,w,c)
 % Works only given a static desciption of body volume
 % M - mass of the body
@@ -611,8 +692,6 @@ end
 
 % Calc vertical centroid of area
 COMy = 1; 
-
-
 
 function [s,h,w,c] = addMouthCap(s,h,w,c)
 Ds      = (s(2)-s(1))./10;
