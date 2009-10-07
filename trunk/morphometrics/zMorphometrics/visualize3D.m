@@ -38,6 +38,33 @@ case 'for metrics'
               setImage(param);
     viewSide('dorsal');
     grid on
+    
+case 'with COM COV'
+    
+  %parameters:
+    fin.alphaNum    = .3;
+    fin.color       = .5.*[1 1 1];
+    bod.alphaNum    = .8;
+    bod.color       = .5.*[1 1 1];
+    param.backColor = [1 1 1];   
+    
+  %make image, play with rendering:
+  figure;
+  
+  
+  
+    h1      = makeImage(t.bod,bod);hold on;
+    %h2      = makeImage(t.fin,fin);hold off;
+              setImage(param);
+    viewSide('right');
+    grid on
+  figure;
+    h1      = makeImage(t.bod,bod);hold on;
+    %h2      = makeImage(t.fin,fin);hold off;
+              setImage(param);
+    viewSide('dorsal');
+    grid on
+    
 end
 
 
