@@ -1,10 +1,10 @@
-function zMorphometrics(fileName, batchMode)
+function zMorphometrics(fileName)
 % Aquires and analyzes morphology from photographs taken from side and top
 % views.  This verison of the code assumes the morphology is the body of a
-% larval fish.
+% larval fish.  fileName must be a tif filename.
 %
 %
-% To conduct the aquistion, 5 grayscale images (alhaving the same filename)
+% To conduct the aquistion, 5 grayscale images (all having the same filename)
 % of the same larva must be saved in the following directories:
 %   In "dorsal grayscale"       - Image of the larva from dorsal view.
 %   In "dorsal binary"          - Silhouette of the dorsal view of body (no fins)in white 
@@ -20,7 +20,7 @@ function zMorphometrics(fileName, batchMode)
 
 get_raw         = 0; % Runs interactive mode for acquiring body periphery
 calc_metrics    = 0; % Processes raw data to calc body properties
-calc_3d         = 0; % Develop 3d shape of body from data_metrics
+calc_3d         = 1; % Develop 3d shape of body from data_metrics
 visualize3d     = 1; % Visualizes 3d shape
 visualizeData   = 0; % Graphs data from data_metrics
 simulateFlow    = 0; % Simulates body movement and relative flow
@@ -237,6 +237,29 @@ if calc_metrics
         % Load raw data, stored in structure 'morph'
         load([zBaseM filesep 'data_raw' filesep fName]);
         
+        % Calculate axes for the swim bladder
+        if isempty(dir([zBaseM filesep 'data_swim_bladder' filesep fName '.mat']))
+            
+            if Vbladder~=0
+                error('Bladder dimensions exist, but Vbladder non-zero')
+            else
+                sb_B = 0;
+                sb_A = 0;
+                sb_C = 0;
+            end
+      
+        else
+            % Load 'd' to get dimensions
+            load([zBaseM filesep 'data_swim_bladder' filesep fName]);
+            
+            sb_A = d.raw.Din_width.*d.raw.Din_calConst/1000;
+            sb_C = d.raw.Lin_height.*d.raw.Lin_calConst/1000;
+            sb_B = ((diff(d.raw.Lin_x)^2 + diff(d.raw.Lin_y)^2)^.5)...
+                   .* d.raw.Lin_calConst / 1000/2;
+            
+            clear d
+        end
+        
         % Define calibration constant
         calLat  = cal.lat.const;
         calDors = cal.dors.const;
@@ -271,6 +294,8 @@ if calc_metrics
         sb_yStart = morph.swimBladder.x(1);
         sb_yEnd   = morph.swimBladder.x(2);
         
+        clear morph
+        
         % Calculate position of swim bladder center in m, wrt body
         sb_y = (sb_y_pix - xL(1)).* calLat * 1e-3;
         sb_z = (sb_z_pix - yL(1)).* calLat * 1e-3;
@@ -280,21 +305,14 @@ if calc_metrics
         sb_yStart = (sb_yStart - xL(1)).* calLat * 1e-3;
         sb_yEnd   = (sb_yEnd   - xL(1)).* calLat * 1e-3;
                
-        % Extract axes for the swim bladder
-        sb_B = abs(sb_yEnd - sb_yStart)/2;
-        sb_A = sqrt(3*Vbladder/(4*pi*sb_B));
-        sb_C = sb_A;
-        
-        % Load grayscale images        
-        imDor	  = imread([zBaseM filesep 'to_be_analyzed' filesep ...
-            'dorsal grayscale' filesep fName '.tif'],'tif');
-        imLat    = imread([zBaseM filesep 'to_be_analyzed' filesep ...
-            'lateral grayscale' filesep fName '.tif'],'tif');
-        
-        clear morph
-        
         % Visualze the results from each individual________________________
         if visProfiles
+            
+            % Load grayscale images
+            imDor	  = imread([zBaseM filesep 'to_be_analyzed' filesep ...
+                'dorsal grayscale' filesep fName '.tif'],'tif');
+            imLat    = imread([zBaseM filesep 'to_be_analyzed' filesep ...
+                'lateral grayscale' filesep fName '.tif'],'tif');
             
             % Display peripheral shape on grayscale images
             warning off 
@@ -428,13 +446,24 @@ if calc_metrics
         m.COV   = COV;      % Center of volume in xyz coordinates
         m.COM   = COM;      % Center of mass in xyz coordinates
         m.I     = I;        % Moment of inertia about COM (z-axis rotation) 
+        m.sb_x  = sb_x;     % x position of SB
+        m.sb_y  = sb_y;     % y position of SB
+        m.sb_z  = sb_z;     % z position of SB
+        m.sb_A  = sb_A;     % minor axis along x of SB
+        m.sb_B  = sb_B;     % minor axis along y of SB
+        m.sb_C  = sb_C;     % minor axis along z of SB
         
         m.info  = {'s: body position' 'h: height of tissue' ...
                    'w: width of tissue' 'c: verticle center of tissue' ...
                    'dA: area at each body segment' ...
                    'COV: Center of volume' ...
                    'COM: Center of mass' ...
-                   'I:Moment of inertia about COM (z-axis rotation)'};
+                   'I:Moment of inertia about COM (z-axis rotation)' ...
+                   'sb_x: x position of SB' 'sb_y: y position of SB' ...
+                   'sb_z: z position of SB' ...
+                   'sb_A: minor axis along x of SB' ...
+                   'sb_B: minor axis along y of SB' ...
+                   'sb_C: minor axis along z of SB'};
                    
         % Store pooled metrics
         mP.b_length(i,1)= s(end);          % Body length
@@ -507,8 +536,10 @@ if calc_3d
         clear m
         
         % Define 3d data for visualization
-        [s,h,w,c]   = addMouthCap(s,h,w,c);
+        %[s,h,w,c]   = addMouthCap(s,h,w,c);
         [X,Y,Z]     = drawBody(s,h,w,c,numPts_circ);
+        
+        %[X,Y,Z] = addCaps(X,Y,Z,numPts_circ);
         
         %Data for visualization:
         threeD.bod.X        = (X-s(1));
@@ -623,16 +654,123 @@ end
 
 %% Simulate flow
 if simulateFlow
-    flow_accel = 1.6; % m s^-2
     
-    for i = 1:43
-        b.rev_vel_20ms(i) = 1000*((1-(0.998/b.rho_body(i)))*1.6*0.02);
-        b.rel_vel_20ms_error(i) = 1000*((1-(0.998/(b.rho_body(i)-b.rho_body_error(i))))*1.6*0.02);
+     % Load pooled data, mP
+    load([zBaseM filesep 'body_metrics'])
+    
+    % Identify those w/out an SB
+    idx = mP.sb_vol==0;
+    
+    % Define mean body density (no SB)
+    rho_noSB = mean(mP.rho_body(idx));
+    
+    % Define mean body density (no SB)
+    rho_wSB = mean(mP.rho_body(~idx));
+    
+    % Define I (with SB)
+    I_wSB = mean(mP.I(~idx));
+    
+    % Define body volume (no SB)
+    V_noSB = mean(mP.Vbody(idx));
+    
+    % Define body volume (with SB)
+    V_wSB = mean(mP.Vbody(~idx));
+    
+    % Define mass (with SB)
+    M_wSB = mean(mP.Mbody);
+    
+    % Mean COM with SB
+    COM_wSB = mean(mP.COM(~idx,:));
+    
+    % Distance fromCOM and tail tip
+    tipLen = mean(mP.b_length(~idx))-mean(mP.COM(~idx,2));
+    
+    % Mean position of level arm btn COV & COM with swim bladder
+    L = [mean(mP.COV(~idx,1)-mP.COM(~idx,1)) ...
+         mean(mP.COV(~idx,2)-mP.COM(~idx,2)) ...
+         mean(mP.COV(~idx,1)-mP.COM(~idx,1))];
+
+    clear mP
+    
+    % Define simulation parameters
+    t           = [0:.0005:.08]';
+    flow_accel  = 1.6; % m s^-2
+    
+    % Define pressure gradient
+    dpdx  = rho_water .* flow_accel;
+    
+    % Simulation 1: translation, no SB
+    U_body1 = (1/rho_noSB) * dpdx .* t;
+    
+    % Simulation 2: translation, with SB
+    U_body2 = (1/rho_wSB) * dpdx .* t;
+    
+    % Simulation 3: rotation_________________________________
+    theta  = pi/4;   % Body orientation wrt flow
+    Fmag   = V_wSB.*dpdx; % Magnitude of pressure force
+    bod    = [L(2).*sin(theta) L(2).*cos(theta) 0]; % Body coordinates
+    F      = [0 -Fmag 0]; % Force vector
+    tau    = cross(F,bod); % Torque about COM
+    omega  = tau(3)./I_wSB; % Rot Accelration at time = 0
+    alph   = 0; % Rot vel at time = 0
+    xAccel = F(2)/M_wSB; % Translations accel at time = 0
+    xVel   = 0; % x velocity at time = 0
+    xPos   = 0; % x position at time = 0
+    
+    for i = 2:length(t)
+        % Time step
+        dt     = t(i)-t(i-1);
         
+        % Current torque
+        tau    = cross(F,bod);
+        
+        % Rotation state variables
+        omega(i,1)  = tau(3)./I_wSB;
+        alph(i,1)   = alph(end) + omega(end)*dt;
+        theta(i,1)  = theta(end) + alph(end)*dt;
+        
+        % Translation state variables
+        xAccel(i,1) = F(2)/M_wSB;
+        xVel(i,1)   = xVel(end) + xAccel(end).*dt;
+        xPos(i,1)   = xPos(end) + xVel(end).*dt;
+        
+        % Update coordinates
+        bod = [L(2)*sin(theta(i)) ...
+               L(2)*cos(theta(i)) ...
+               0];
     end
     
-    b.rel_vel_20ms_error = b.rel_vel_20ms - b.rel_vel_20ms_error;
-
+    % Plot kinematics
+    figure;
+    subplot(4,1,1)
+    plot(t.*1000,flow_accel.*t.*1000,'b',...
+         t.*1000,U_body1.*1000,'r',...
+         t.*1000,U_body2.*1000,'r--')
+    xlabel('t (ms)')
+    ylabel('U (mm/s)')
+    
+    subplot(4,1,2)
+    plot(t.*1000,theta.*(180/pi))
+    xlabel('t (ms)')
+    ylabel('theta (deg)')
+    
+    subplot(4,1,3)
+    plot(t.*1000,xPos.*1000)
+    xlabel('t (ms)')
+    ylabel('Position (mm)')
+    
+    subplot(4,1,4)
+    plot(t.*1000,flow_accel.*t.*1000-U_body2.*1000,'r');
+    hold on
+    plot(t.*1000,alph.*tipLen.*1000,'b')
+    hold off
+    ylabel('velocity (mm/s)')
+    xlabel('t (ms)')
+    legend('Relative flow','rot of tail tip','Location','NorthWest')
+    
+    clear idx rho_noSB rho_wSB I_wSB V_noSB V_wSB COM_wSB L t flow_accel
+    clear dpdx U_body1 Ubody2 bodyS i S pForce omega alpha Fmag bod F tau 
+    clear xAccel xVel xPos dt
 end
 
 
@@ -896,47 +1034,130 @@ c       = [c(1) c(1) c];
 
 function [x,y,z]= drawBody(s,h,w,c,numPts)
 % Provides 3d coordinates of the body
+
+% Define radial positions along vector
+theta = linspace(0,2*pi,numPts)';
+
+% Define empty vectors for coordinates
 x=[];y=[];z=[];
 
-theta = linspace(0,2*pi,numPts)';
+% Make mouth cap  _______________________________________
+n = numPts/10;
+phi = linspace(0,.75*pi/2,n)';
+ds = .02.*range(s); %2*s(2)-s(1);
+%sC = linspace(s(1)-ds,s(1),n);
+hC = h(1) .* sin(phi)./max(sin(phi));
+wC = w(1) .* sin(phi)./max(sin(phi));
+sC = -(ds.*cos(phi)-ds.*cos(phi(end)));
+
+% Loop down the body length
+for i=1:length(sC)-1  
+    
+  % Draw first ellipse   
+    yTemp1 = sC(i)*ones(size(theta));
+    xTemp1 = (wC(i)/2) .* cos(theta);
+    zTemp1 = (hC(i)/2) .* sin(theta) + c(1);
+    
+  % Draw second ellipse  
+    yTemp2 = sC(i+1)*ones(size(theta));
+    xTemp2 = (wC(i+1)/2) .* cos(theta);
+    zTemp2 = (hC(i+1)/2) .* sin(theta) + c(1);
+    
+  % Combine data (works with 'patch')
+    x	= [x [xTemp1(1:end-1)';... 
+              xTemp2(1:end-1)';... 
+              xTemp2(2:end)';... 
+              xTemp1(2:end)']];
+                      
+    y   = [y [yTemp1(1:end-1)';... 
+              yTemp2(1:end-1)';...
+              yTemp2(2:end)';...
+              yTemp1(2:end)']];
+                      
+    z   = [z [zTemp1(1:end-1)';...
+              zTemp2(1:end-1)';...
+              zTemp2(2:end)';...
+              zTemp1(2:end)']];
+end 
+
+clear xTemp1 yTemp1 zTemp1 xTemp2 yTemp2 zTemp2
+clear n phi ds sC hC wC
+
+
+% Make body coordinates _______________________________________
+
+% Loop down the body length
 for i=1:length(s)-1  
-  %DRAW FIRST ELLIPSE:
-    height      = h(i);
-    width       = w(i);
+    
+  % Draw first ellipse  
     yTemp1      = s(i)*ones(size(theta));
-    xTemp1      = (width/2) .* cos(theta);
-    zTemp1      = (height/2) .* sin(theta) + c(i);
+    xTemp1      = (w(i)/2) .* cos(theta);
+    zTemp1      = (h(i)/2) .* sin(theta) + c(i);
     
-%     ecc             = ( 1 - (height/2)^2/(width/2)^2 )^.5;
-%     [yTemp1,zTemp1] = ellipse1(0,0,[1 ecc],0,[0 360],[],'degrees',numPts);
-%   % [yTemp1,zTemp1] = giveEllipse(0,c(i),width/2,height/2,numPts);
-%    % [yTemp1,zTemp1] = ellipse1(0,0,[1 axes2ecc(width/2,height/2)],0,[0 360],[],'degrees',numPts);
-%     zTemp1          = (width/2) * zTemp1 + c(i);
-%     yTemp1          = (width/2) * yTemp1;
-    
-  %DRAW SECOND ELLIPSE:
-    height      = h(i+1);
-    width       = w(i+1);
-    centerr     = c(i+1);
-    
+  % Draw second ellipse    
     yTemp2      = s(i+1)*ones(size(theta));
-    xTemp2      = (width/2) .* cos(theta);
-    zTemp2      = (height/2) .* sin(theta) + c(i+1);
+    xTemp2      = (w(i+1)/2) .* cos(theta);
+    zTemp2      = (h(i+1)/2) .* sin(theta) + c(i+1);
     
-%   %  [yTemp2,zTemp2] = giveEllipse(0,c(i+1),width/2,height/2,numPts);
-%     ecc             = ( 1 - (height/2)^2/(width/2)^2 )^.5;
-%     [yTemp2,zTemp2] = ellipse1(0,0,[1 ecc],0,[0 360],[],'degrees',numPts);
-%     %[yTemp2,zTemp2] = ellipse1(0,0,[1 axes2ecc(width/2,height/2)],0,[0 360],[],'degrees',numPts);
-%     zTemp2          = (width/2) * zTemp2 + c(i+1);
-%     yTemp2          = (width/2) * yTemp2;
-%     xTemp2          = s(i+1)*ones(size(yTemp2));   
-%     if 0,plot3(xTemp1,yTemp1,zTemp1,'g',xTemp2,yTemp2,zTemp2,'m');axis equal;hold on;end
-  %COMBINE DATA:
-    all             = 1:length(xTemp2)-1;
-    x               = [x [xTemp1(all)'; xTemp2(all)'; xTemp2(all+1)'; xTemp1(all+1)']];
-    y               = [y [yTemp1(all)'; yTemp2(all)'; yTemp2(all+1)'; yTemp1(all+1)']];
-    z               = [z [zTemp1(all)'; zTemp2(all)'; zTemp2(all+1)'; zTemp1(all+1)']];
+  % Combine data (works with 'patch')
+    x	= [x [xTemp1(1:end-1)';... 
+              xTemp2(1:end-1)';... 
+              xTemp2(2:end)';... 
+              xTemp1(2:end)']];
+                      
+    y   = [y [yTemp1(1:end-1)';... 
+              yTemp2(1:end-1)';...
+              yTemp2(2:end)';...
+              yTemp1(2:end)']];
+                      
+    z   = [z [zTemp1(1:end-1)';...
+              zTemp2(1:end-1)';...
+              zTemp2(2:end)';...
+              zTemp1(2:end)']];
 end  
+
+% Make tail cap  _______________________________________
+n = numPts/10;
+phi = linspace(0,0.75*pi/2,n)';
+ds = .02.*range(s); %2*s(2)-s(1);
+%sC = linspace(s(1)-ds,s(1),n);
+hC = h(end) .* sin(phi)./max(sin(phi));
+wC = w(end) .* sin(phi)./max(sin(phi));
+sC = s(end) + ds.*cos(phi)-+ ds.*cos(phi(end));
+
+% Loop down the body length
+for i=1:length(sC)-1  
+    
+  % Draw first ellipse   
+    yTemp1 = sC(i)*ones(size(theta));
+    xTemp1 = (wC(i)/2) .* cos(theta);
+    zTemp1 = (hC(i)/2) .* sin(theta) + c(end);
+    
+  % Draw second ellipse  
+    yTemp2 = sC(i+1)*ones(size(theta));
+    xTemp2 = (wC(i+1)/2) .* cos(theta);
+    zTemp2 = (hC(i+1)/2) .* sin(theta) + c(end);
+    
+  % Combine data (works with 'patch')
+    x	= [x [xTemp1(1:end-1)';... 
+              xTemp2(1:end-1)';... 
+              xTemp2(2:end)';... 
+              xTemp1(2:end)']];
+                      
+    y   = [y [yTemp1(1:end-1)';... 
+              yTemp2(1:end-1)';...
+              yTemp2(2:end)';...
+              yTemp1(2:end)']];
+                      
+    z   = [z [zTemp1(1:end-1)';...
+              zTemp2(1:end-1)';...
+              zTemp2(2:end)';...
+              zTemp1(2:end)']];
+end 
+
+clear xTemp1 yTemp1 zTemp1 xTemp2 yTemp2 zTemp2
+clear n phi ds sC hC wC
+
 
 function [x,y] = smoothData(x,y,numPts,tolerance)
 uniques     = find(~diff(x)==0);
@@ -945,3 +1166,93 @@ y           = y(uniques);
 sp          = spaps(x, y, tolerance);
 x           = min(x):(max(x)-min(x))/(numPts-1):max(x);
 y           = fnval(sp,x);
+
+function S = localSystem(P1,P2,P3)
+% Defines a transformation vector for a local coordinate system in an
+% inertial frame of reference.  Uses P1 as the xaxis and P2 as the origin, and 
+% P3 as the z-axis. Coordinates must be (1x3) vectors. Note: if theses axes 
+% are not orthogonal, the z-axis direction is assumed to be more accurate
+% than the x-axis and the x-axis direction is adjusted to make the coordinates 
+% orthoganal.
+ 
+% Check dimensions of inputs
+if size(P1,1)~=1 || size(P1,2)~=3 ||...
+   size(P2,1)~=1 || size(P2,2)~=3 ||...
+   size(P3,1)~=1 || size(P3,2)~=3
+    error('Coordinates must be 1x3 vectors');
+end
+ 
+% Define units vectors for x and y axes
+xAxis   = (P1-P2)./norm(P1-P2);
+zAxis   = (P3-P2)./norm(P3-P2);
+ 
+% Define yaxis from the cross product
+yAxis   = cross(zAxis,xAxis);
+yAxis   = yAxis./norm(yAxis);
+ 
+% Redefine the xaxis, so all axes are orthoganal
+xAxis   = cross(yAxis,zAxis);
+ 
+% Define transformation matrix
+S       = [xAxis' yAxis' zAxis'];
+ 
+function [xn,yn,zn] = localToGlobal(x,y,z,origin,S)
+% Transforms coordinates from the local coordinate system to the global
+% system. Coordinates may be given as nxm matricies of equal dimensions.
+ 
+% Check dimensions of inputs
+if ~( (size(origin,1)==1 && size(origin,2)==3) ||...
+      (size(origin,1)==3 && size(origin,2)==1) )   
+    error('Origin must be a 1x3 or 3x1 vector');
+    
+elseif size(S,1)~=3 || size(S,2)~=3
+    error('S must be a 3x3 matrix');
+    
+elseif ~min(size(x)==size(y)) || ~min(size(x)==size(z)) || ~min(size(y)==size(z))
+    error('x, y, & z must have the same dimensions')
+    
+end
+ 
+% Loop through column to complete transformation
+for i = 1:size(x,2)
+    pts     = [x(:,i) y(:,i) z(:,i)];
+    pts     = [inv(S)'*pts']';
+ 
+    xn(:,i) = pts(:,1) + origin(1);
+    yn(:,i) = pts(:,2) + origin(2);
+    zn(:,i) = pts(:,3) + origin(3);
+    
+    clear pts 
+end
+ 
+function [xn,yn,zn] = globalToLocal(x,y,z,origin,S)
+% Transforms coordinates from the global coordinate system to the local
+% system. Coordinates may be given as nxm matricies of equal dimensions.
+ 
+% Check dimensions of inputs
+if ~( (size(origin,1)==1 && size(origin,2)==3) ||...
+      (size(origin,1)==3 && size(origin,2)==1) )       
+    error('Origin must be a 1x3 or 3x1 vector');
+       
+elseif size(S,1)~=3 || size(S,2)~=3
+    error('S must be a 3x3 matrix');
+    
+elseif ~min(size(x)==size(y)) || ~min(size(x)==size(z)) || ~min(size(y)==size(z))
+    error('x, y, & z must have the same dimensions')
+    
+end
+ 
+% Loop through column to complete transformation
+for i = 1:size(x,2)
+    pts         = [x(:,i) y(:,i) z(:,i)];    
+    pts(:,1)    = x(:,i)-origin(1);
+    pts(:,2)    = y(:,i)-origin(2);
+    pts(:,3)    = z(:,i)-origin(3);
+    pts         = [S'*pts']';
+    
+    xn(:,i)     = pts(:,1);
+    yn(:,i)     = pts(:,2);
+    zn(:,i)     = pts(:,3);
+    
+    clear pts
+end
