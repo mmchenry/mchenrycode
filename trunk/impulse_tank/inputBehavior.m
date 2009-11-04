@@ -1,9 +1,19 @@
 function c = inputBehavior(vid_path,c,fishNums)
+% Prompts users for data on the behvaior of larvae
 
+%% Parameter values
+
+preTrigFrames = 100;
+
+
+%% Instructions
 
 disp(' ');
 disp('Use a video player to target individuals that should be analyzed')
 disp('and determine if they are swimming.')
+disp(' ')
+disp(['NOTE: Assuming that the video has ' num2str(preTrigFrames) ...
+      ' frames before the trigger'])
 disp(' ');
 
 if isempty(c)
@@ -12,36 +22,54 @@ else
     overWrite = 0;
 end
 
-%% Determine filename for first frame of tifs
+%% Prompt for the time since light change (5 or 20 min)
+
+if isempty(dir([vid_path filesep 'time_from_switch.mat']))
+    
+    % Prompt for switch time
+    answer = inputdlg({'Time from light switch (5 or 20)?'},' ',1,{'5'});
+    switchTime = str2num(answer{1});
+    
+    % Check response and save
+    if ~(switchTime==5 || switchTime==20)
+        error('Your answer must be 5 or 20')
+    else 
+        save([vid_path filesep 'time_from_switch'],'switchTime');
+    end
+    
+else
+    % Load, if already acquired
+    load([vid_path filesep 'time_from_switch.mat'])
+    
+end
+
+
+%% Determine file path for video frame at time of trigger
 
 % Get filenames
-a = dir(vid_path);
+a = dir([vid_path filesep '*.tif']);
 
-% Loop through each filename unitl reaching a tiff image
+% Loop through each filename until reaching a tiff image
 k = 1;
 for i = 1:length(a)
     cName = a(i).name;
 
-    % Define file path from first tif filename with a zero
-    % start at 50th frame
-    if length(cName)>3 && ...
-       strcmp(cName(end-2:end),'tif') && ...
-       ~isempty(find(cName=='0',1))
-   
+    % Define file path from first tif filename with a zero in the filename
+    % after preTrigFrames
+    if length(cName)>3 && ~isempty(find(cName=='0',1))
         k = k+1;
-        if k > 51
+        if k > preTrigFrames
             frame_path = [vid_path filesep cName];
             break
         end
         
     elseif i==length(a)
-        error('No tif file in given diretcory')
+        error('No tif file in given directory')
     end
  
 end
 
-clear cName k
-
+clear cName k preTrigFrames
 
 
 %% Prompt to choose roi or load from faststart_data
@@ -57,7 +85,9 @@ if overWrite
     f = figure;
     rois = [];
     im = imread(frame_path);
+    warning off
     imshow(im)
+    warning on
     hold on
 
     while 1==1
@@ -84,6 +114,9 @@ if overWrite
         c(fish).roi.x = roi_x;
         c(fish).roi.y = roi_y;
         
+        % Store switch time
+        c(fish).switchTime = switchTime;
+        
         % Advance index
         fish = fish + 1;
 
@@ -103,7 +136,6 @@ end
 
 
 %% Get data on individual fish
-
 
 % Set general parameters
 invertImage = 0;
@@ -146,12 +178,17 @@ for i = fishNums
     % Acquire left eye, find coorindates
     txt = ['Fish ' num2str(i) ': Choose left eye'];
     [left_x,left_y] = choosePoints(im_bw,1,0,txt,roi_x,roi_y);
+    
+    if isempty(left_x)
+        error('Use need to select a point for the left eye');
+    end
+    
     bw_tmp  = bwselect(bw,round(left_x),round(left_y));
     L_tmp   = bwlabel(bw_tmp);
     val_tmp = regionprops(L_tmp,'Centroid');
     
     % Store left eye coordinates
-    if ~isstruct(val_tmp) && isemtpy(val_tmp)
+    if length(val_tmp)==0
         error('No spot where you clicked')
     elseif length(val_tmp) > 1 
         error('More than one spot selected')
@@ -166,12 +203,17 @@ for i = fishNums
     % Acquire right eye, find coorindates
     txt = ['Fish ' num2str(i) ': Choose right eye'];
     [right_x,right_y] = choosePoints(im_bw,1,0,txt,roi_x,roi_y);
+    
+    if isempty(right_x)
+        error('Use need to select a point for the right eye');
+    end
+    
     bw_tmp  = bwselect(bw,round(right_x),round(right_y));
     L_tmp   = bwlabel(bw_tmp);
     val_tmp = regionprops(L_tmp,'Centroid');
     
     % Store right eye coordinates
-    if ~isstruct(val_tmp) && isemtpy(val_tmp)
+    if length(val_tmp)==0
         error('No spot where you clicked')
     elseif length(val_tmp) > 1 
         error('More than one spot selected')
@@ -182,56 +224,71 @@ for i = fishNums
 
     clear txt bw_tmp L_tmp val_tmp right_x right_y
     
-
-    % Acquire trunk, find coorindates
-    txt = ['Fish ' num2str(i) ': Choose trunk'];
-    [trnk_x,trnk_y] = choosePoints(im_bw,1,0,txt,roi_x,roi_y);
-    bw_tmp  = bwselect(bw,round(trnk_x),round(trnk_y));
-    L_tmp   = bwlabel(bw_tmp);
-    val_tmp = regionprops(L_tmp,'Centroid');
-    
-    %  Store trunk coordinates
-    if ~isstruct(val_tmp) && isemtpy(val_tmp)
-        error('No spot where you clicked')
-    elseif length(val_tmp) > 1 
-        error('More than one spot selected')
-    else
-        c(i).trnk.x     = val_tmp.Centroid(1);
-        c(i).trnk.y     = val_tmp.Centroid(2);
-    end
-    
-    clear txt bw_tmp L_tmp val_tmp trnk_x trnk_y
-    
+    % Check for distinct points
+    if (c(i).right_eye.x - c(i).left_eye.x)==0 && ...
+       (c(i).right_eye.y - c(i).left_eye.y)==0 
+       error('Coordinates for the left and right eye must be distinct');
+    end  
          
     % Prompt user data on this fish
     while 1==1     
         name = ['Fish ' num2str(i) ' data'];
-        prompt = {'Was this fish swimming (1 = yes, 0 = no)',...
-            'At what frame number did they fast start (0, if never)?'
+        prompt = {'Activity of this fish-   1:motionless   2:beating   3:gliding',...
+            'At what frame number did they fast start (0, if never)?',...
+            'Direction of flow-  1:L to R   2:R to L   3:D to U   4:U to D'
             };
 
-        answer = inputdlg(prompt,name,1);
-
+        answer = inputdlg(prompt,name,1,{'1' '0' '2'});
+        
+        a1 = str2num(answer{1});
+        a2 = str2num(answer{2});
+        a3 = str2num(answer{3});
+        
         if isempty(answer)
             return
-        elseif (~(str2num(answer{1})==0) && ~(str2num(answer{1})==1))
-            warning('Answer must be either 0 or 1')
+            
+        elseif a1~=1 && a1~=2 && a1~=3
+                    error('invalid activity number');
+                    
+        elseif a3~=1 && a3~=2 && a3~=3 && a3~=4
+                    error('invalid flow direction number');
         else
-            c(i).swimming               = str2num(answer{1});
-            c(i).fast_start_frame_num   = str2num(answer{2});
+            if a1==1   
+                c(i).swimming = 'still';
+            elseif a1==2
+                c(i).swimming = 'beats';
+            else
+                c(i).swimming = 'glide';
+            end
+            
+            c(i).fast_start_frame_num = str2num(answer{2});
+            
+            if a3==1
+                c(i).flow_dir = 'L2R';
+            elseif a3==2
+                c(i).flow_dir = 'R2L';
+            elseif a3==3
+                c(i).flow_dir = 'D2U';
+            elseif a3==4
+                c(i).flow_dir = 'U2D';
+            else
+                error('Flow direction given is not an option');
+            end
+            
             break
         end
     end
     
     save([vid_path filesep 'faststart_data'],'c')
     
+    disp(' '); disp('Done input')
 end
 
 
 
 
 
-%% function: choosePoints
+%% Functions
 
 function [x,y] = choosePoints(im,numLimit,link,title_text,x_roi,y_roi,useCurrent)
 %Used for finding coordinate points on a static image 'im'.
@@ -284,6 +341,7 @@ if ~isempty(x_roi) && ...
     error('Two coordinates are needed to specify a roi');
 end
     
+warning off
 
 % Display image
 if ~useCurrent
@@ -367,17 +425,17 @@ while 1 == 1
     hold on
     
     if link == 0
-        plot(x,y,'+r')
+        plot(x,y,'+k')
         
     elseif link == 1
-        plot(x,y,'o-r')
+        plot(x,y,'o-k')
         
     elseif link == 2
         if length(x)<2
-            plot(x,y,'+r')
+            plot(x,y,'+k')
         else
             plot([x(1) x(2) x(2) x(1) x(1)],...
-                 [y(1) y(1) y(2) y(2) y(1)],'r-')
+                 [y(1) y(1) y(2) y(2) y(1)],'k-')
         end
     end
     hold off
@@ -388,13 +446,17 @@ if ~useCurrent
     close
 end
 
+warning on
+
 %% function: chooseThresh
 
 function [tVal,img] = chooseThresh(im,tVal,invertImage,x_roi,y_roi,title_txt)
 %Used for choosing a threshold value in 'im'.
 
 % Parameters
-fillColor  = [.43 .49 1];
+fillColor  = [1 0 0];
+
+warning off
 
 % Instructions
 disp(' ')
@@ -466,10 +528,10 @@ img.cdata     = im_bw;
 img.colormap = cMap;
 
 close
+warning on
 
 
 %% function: imDisplay
-
 
 function imBW = imDisplay(im,tVal)
 %shows a bitmap image with a threshold level of pixels highlighted in color

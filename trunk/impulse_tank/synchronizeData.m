@@ -119,6 +119,11 @@ rate_vid        = video.frameRate_fps;
 dur_vid         = video.duration_frames;
 postTrig_vid    = video.posTrig_frames;
 
+if dur_vid < 1000
+    warning(['Recording reported to have a duration of only ' ...
+        num2str(dur_vid) ' frames']);
+end
+
 %CALCULATED VARIABLES ====================================
 % Use daq data and info about video trigger to calculate a
 % time vector for the video that coincides with the daq data
