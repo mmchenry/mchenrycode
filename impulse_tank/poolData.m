@@ -7,7 +7,7 @@ function poolData(mPath)
 
 runCollect  = 1;
 runPlotting = 1;
-runStats    = 0;
+runStats    = 1;
 
 
 %% Define directories
@@ -73,15 +73,10 @@ if runCollect
     % Initiate k
     k = 1;
     
-    % Initiate p
-    p.d_toward = [];
-    p.d_side   = [];
-    p.d_away   = [];
-    p.a_beat   = [];
-    p.a_glide  = [];
-    p.a_still   = [];
+    % Initiate frequency matrix
+    f = zeros(3,3,2);   
     
-    % Initiate L
+    % Initiate L, structure of latency values
     L.d_toward = [];
     L.d_side   = [];
     L.d_away   = [];
@@ -150,7 +145,7 @@ if runCollect
                     % Calculate angle
                     theta = (180/pi) * acos(dot(eyeVector,flowVector)/...
                         norm(eyeVector)*norm(flowVector));
-                    
+       %TODO: Change these categories             
                     if (theta > 0) && (theta <= 60)
                         direction = 'toward';
                     elseif (theta > 60) && (theta <= 120)
@@ -161,21 +156,24 @@ if runCollect
                     
                     % Calculate latency
                     [amp,daq,vid] = synchronizeData(...
-                                        [mPath filesep batch{i}.filename]);
+                                        [mPath filesep batch{i}.filename],0);
                     preTrig_frms  = vid.dur - vid.postTrg;
                     
                     % Define start frame
                     start_frm = c(j).fast_start_frame_num;
                     
-                    % If fast start
-                    if start_frm~=0
+                    % If no fast start
+                    if start_frm==0
                         
+                        fast_start = 2;
+                    
+                    % If fast start, calculate latency
+                    else
+  
                         % Latency is the video time for the frame at which
                         % motion was visible - video time of pretrigger period
                         % - the delay in the satrt of the motor motion
-                        latency = vid.t(start_frm+preTrig_frms) - amp.t_mStart;
-                        
-                        %[vid.t(preTrig_frms) start_frm latency]
+                        latency = vid.t(start_frm+preTrig_frms) - amp.t_mStart;                        
                         
                         if latency < 0
                             warning(['start_frm = ' num2str(start_frm)...
@@ -183,6 +181,7 @@ if runCollect
                                 batch{i}.filename ...
                                 ' is before stimulus '...
                                 '-- not recorded']);
+                            fast_start = 0;
                         else
                             
                             % Store data for latency ANOVA
@@ -191,68 +190,73 @@ if runCollect
                             s.direction(k,:)  = direction;
                             s.latency(k,1)    = latency;
                             
-                            % Store data for probablilty & latency analysis
+                            k = k + 1;
+                            
+                            % Store data for latency plotting
                             if strcmp(direction,'toward')
-                                p.d_toward = [p.d_toward; 1];
                                 L.d_toward = [L.d_toward; latency];
                             elseif strcmp(direction, 'side  ')
-                                p.d_side = [p.d_side; 1];
+ 
                                 L.d_side = [L.d_side; latency];
                             elseif strcmp(direction, 'away  ')
-                                p.d_away = [p.d_away; 1];
                                 L.d_away = [L.d_away; latency];
                             end
                             
                             if strcmp(c(j).swimming,'beats')
-                                p.a_beat = [p.a_beat; 1];
                                 L.a_beat = [L.a_beat; latency];
                             elseif strcmp(c(j).swimming,'glide')
-                                p.a_glide = [p.a_glide; 1];
                                 L.a_glide = [L.a_glide; latency];
                             elseif strcmp(c(j).swimming,'still')
-                                p.a_still = [p.a_still; 1];
                                 L.a_still = [L.a_still; latency];
-                            end
+                            end    
                             
-                            % Update k
-                            k = k + 1;
-                            
+                            % Set fast_start
+                            fast_start = 1;
                         end
-                        
-                        % If no fast start
-                    else
-                        
-                        % Store data for probablilty analysis
-                        if strcmp(direction,'toward')
-                            p.d_toward = [p.d_toward; 0];
-                        elseif strcmp(direction,'side')
-                            p.d_side = [p.d_side; 0];
-                        elseif strcmp(direction, 'away  ')
-                            p.d_away = [p.d_away; 0];
-                        end
-                        
-                        if strcmp(c(j).swimming,'beats')
-                            p.a_beat = [p.a_beat; 0];
-                        elseif strcmp(c(j).swimming,'glide')
-                            p.a_glide = [p.a_glide; 0];
-                        elseif strcmp(c(j).swimming,'still')
-                            p.a_still = [p.a_still; 0];
-                        end
-                        
                     end
                     
-                    clear amp daq vid
+                    
+                    % Record response (or non-response)
+                    if (fast_start==1) || (fast_start==2)             
+                        
+                        if strcmp(c(j).swimming,'beats')
+                            if strcmp(direction,'toward')
+                                f(1,1,fast_start) = f(1,1,fast_start) + 1;
+                            elseif strcmp(direction, 'side  ')
+                                f(1,2,fast_start) = f(1,2,fast_start) + 1;
+                            elseif strcmp(direction, 'away  ')
+                                f(1,3,fast_start) = f(1,3,fast_start) + 1;
+                            end
+                        elseif strcmp(c(j).swimming,'glide')
+                            if strcmp(direction,'toward')
+                                f(2,1,fast_start) = f(2,1,fast_start) + 1;
+                            elseif strcmp(direction, 'side  ')
+                                f(2,2,fast_start) = f(2,2,fast_start) + 1;
+                            elseif strcmp(direction, 'away  ')
+                                f(2,3,fast_start) = f(2,3,fast_start) + 1;
+                            end
+                        elseif strcmp(c(j).swimming,'still')
+                            if strcmp(direction,'toward')
+                                f(3,1,fast_start) = f(3,1,fast_start) + 1;
+                            elseif strcmp(direction, 'side  ')
+                                f(3,2,fast_start) = f(3,2,fast_start) + 1;
+                            elseif strcmp(direction, 'away  ')
+                                f(3,3,fast_start) = f(3,3,fast_start) + 1;
+                            end
+                        end
+                        
+                    end                           
+                    
+                    clear amp daq vid fast_start
                     clear direction theta latency
                     
-                    %TO DO: figure out stats,
-                    %        make graphs
                 end
             end            
         end
     end
     
     save([mPath filesep 'ANOVA_data.mat'],'s')
-    save([mPath filesep 'probability_data.mat'],'p')
+    save([mPath filesep 'probability_data.mat'],'f')
     save([mPath filesep 'latency_data.mat'],'L')
     
 end
@@ -262,37 +266,39 @@ end
 
 if runPlotting
     
-    % Load data
+    % Load L, latency data
     load([mPath filesep 'latency_data.mat'])
+    
+    % Load f
     load([mPath filesep 'probability_data.mat'])
     load([mPath filesep 'ANOVA_data.mat'])
     
     % Parameters for plotting
-    yTicksL = (floor(min(1000.*s.latency)):10:ceil(max(1000.*s.latency)))./1000;
+    %yTicksL = (floor(min(1000.*s.latency)):10:ceil(max(1000.*s.latency)))./1000;
     yTicksP = 0:.5:1;
     txtOffLatency = .004;
     txtOffProb = 0.05;
     
     % Calculate probability stats
-    %pToward            = sum(p.d_toward)/length(p.d_toward);
-    [pToward,iToward] = binofit(sum(p.d_toward),length(p.d_toward));
+    [pToward,iToward] = binofit(sum(f(:,1,1)),sum(sum(f(:,1,:))));
     iToward = iToward(2) - pToward;
     
-    [pAway,iAway] = binofit(sum(p.d_away),length(p.d_away));
+    [pAway,iAway] = binofit(sum(f(:,2,1)),sum(sum(f(:,2,:))));
     iAway = iAway(2) - pAway;
     
-    [pSide,iSide] = binofit(sum(p.d_side),length(p.d_side));
+    [pSide,iSide] = binofit(sum(f(:,3,1)),sum(sum(f(:,3,:))));
     iSide = iSide(2) - pSide;
     
-    [pBeat,iBeat] = binofit(sum(p.a_beat),length(p.a_beat));
+    [pBeat,iBeat] = binofit(sum(f(1,:,1)),sum(sum(f(1,:,:))));
     iBeat = iBeat(2) - pBeat;
     
-    [pGlide,iGlide] = binofit(sum(p.a_glide),length(p.a_glide));
+    [pGlide,iGlide] = binofit(sum(f(2,:,1)),sum(sum(f(2,:,:))));
     iGlide = iGlide(2) - pGlide;
     
-    [pStill,iStill] = binofit(sum(p.a_still),length(p.a_still));
+    [pStill,iStill] = binofit(sum(f(3,:,1)),sum(sum(f(3,:,:))));
     iStill = iStill(2) - pStill;
     
+    figure;
     
     % Plot probability vs. activity level
     subplot(2,2,1)
@@ -310,11 +316,13 @@ if runPlotting
         hold off
         
         % Numbers
-        text(1,pBeat-txtOffProb,[num2str(sum(p.a_beat)) '/' num2str(length(p.a_beat))]);
-        text(2,pGlide-txtOffProb,[num2str(sum(p.a_glide)) '/' num2str(length(p.a_glide))]);
-        text(3,pStill-txtOffProb,[num2str(sum(p.a_still)) '/' num2str(length(p.a_still))]);
-        
-        
+        text(1,pBeat-txtOffProb,[num2str(sum(f(1,:,1))) '/' ...
+                                    num2str(sum(sum(f(1,:,:))))]);
+        text(2,pGlide-txtOffProb,[num2str(sum(f(2,:,1))) '/' ...
+                                    num2str(sum(sum(f(2,:,:))))]);
+        text(3,pStill-txtOffProb,[num2str(sum(f(3,:,1))) '/' ...
+                                    num2str(sum(sum(f(3,:,:))))]);
+             
     % Plot probability vs. direction
     subplot(2,2,2)
         % Plot
@@ -330,9 +338,12 @@ if runPlotting
         hold off
         
          % Numbers
-        text(1,pToward-txtOffProb,[num2str(sum(p.d_toward)) '/' num2str(length(p.d_toward))]);
-        text(2,pSide-txtOffProb,[num2str(sum(p.d_side)) '/' num2str(length(p.d_side))]);
-        text(3,pAway-txtOffProb,[num2str(sum(p.d_away)) '/' num2str(length(p.d_away))]);
+        text(1,pToward-txtOffProb,[num2str(sum(f(:,1,1))) '/' ...
+                                    num2str(sum(sum(f(:,1,:))))]);
+        text(2,pSide-txtOffProb,[num2str(sum(f(:,2,1))) '/' ...
+                                    num2str(sum(sum(f(:,2,:))))]);
+        text(3,pAway-txtOffProb,[num2str(sum(f(:,3,1))) '/' ...
+                                    num2str(sum(sum(f(:,3,:))))]);
         
         
     % Plot latency vs. activity level
@@ -351,8 +362,8 @@ if runPlotting
         % Labels & axes
         xlabel('beat                         glide                         still')
         set(gca,'XTickLabel',' ')
-        set(gca,'YTick',yTicksL)
-        set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
+        %set(gca,'YTick',yTicksL)
+        %set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
         ylabel('Latency (s)')
         
         hold off
@@ -374,8 +385,8 @@ if runPlotting
         % Labels & axes
         hold off
         set(gca,'XTickLabel',' ')
-        set(gca,'YTick',yTicksL)
-        set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
+        %set(gca,'YTick',yTicksL)
+        %set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
         xlabel('toward                         side                         away')
         
     
@@ -384,16 +395,22 @@ end
 %% Run stats
 
 if runStats
+    load([mPath filesep 'ANOVA_data.mat'])
+    load([mPath filesep 'probability_data.mat'])
+%     % ANOVA: Test the effects on latency
+%     sName = 'ltncy';
+%     varnames= {['swTime_' sName] ['active_' sName] ['dir_' sName]};
+%     
+%     [p,table,stats] = anovan(s.latency,...
+%                              {s.switchTime s.activity s.direction},'model','interaction',...
+%                              'varnames',varnames);
+                         
+    % Chi-square: test effects of direction and activity on response
+    var1 = 'activity';
+    var2 = 'direction';
+    var3 = 'fast start';
     
-    % Test the effects on latency
-    sName = 'ltncy';
-    varnames= {['swTime_' sName] ['active_' sName] ['dir_' sName]};
-    
-    [p,table,stats] = anovan(s.latency,...
-                             {s.switchTime s.activity s.direction},'model','interaction',...
-                             'varnames',varnames);
-    
-    
+    ChiSqr3D(f,var1,var2,var3,0.05)
 end
 
 

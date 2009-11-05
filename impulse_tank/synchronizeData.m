@@ -1,4 +1,4 @@
-function [amp,daq,vid] = synchronizeData(mPath)
+function [amp,daq,vid] = synchronizeData(mPath,plotSyncData)
 % Loads data from the daq and amplifier and synchronizes their timing such
 % that t=0 occurs at the leading edge of the trigger signal
 
@@ -13,6 +13,10 @@ motorFile = [mPath filesep 'motor.csv'];
 daqFile   = [mPath filesep 'daqData.mat'];
 videoFile = [mPath filesep 'videoData.mat'];
 
+
+if nargin<1
+    plotSyncData = 0;
+end
 
 %% MOTOR KINEMATICS (from amplifier)
 
@@ -129,36 +133,78 @@ end
 % time vector for the video that coincides with the daq data
 exposurePeriod  = (1./rate_vid); 
 
-if isempty(find(OUT1_daq<4.9)) || isempty(find(OUT1_daq>2))
-    disp(' '); disp(['mPath = ' mPath]); disp(' ');
-    warning(['No trigger signal in video -- setting zero time to half of ' ...
-        'first frame after trigger']);
-    
-    t_frms  = (-(dur_vid-postTrig_vid):(postTrig_vid-1)) + 0.5;
-    t_vid   = t_frms .* (1./rate_vid);
-    clear frNum
-else
-    % video end time found from daq data (with high temporal resolution)
-	% as a half sample prior to drop in OUT1 below 4.9V:
-    endTime_vid = t_daq(min(find(OUT1_daq<4.9))) - 1./(2.*sampleRate_daq);
+% if isempty(find(OUT1_daq<4.9)) || isempty(find(OUT1_daq>2))
+%     disp(' '); disp(['mPath = ' mPath]); disp(' ');
+%     warning(['No trigger signal in video -- setting zero time to half of ' ...
+%         'first frame after trigger']);
+%     
+%     t_frms  = (-(dur_vid-postTrig_vid):(postTrig_vid-1)) + 0.5;
+%     t_vid   = t_frms .* (1./rate_vid);
+%     clear frNum
+% else
+%     % video end time found from daq data (with high temporal resolution)
+% 	% as a half sample prior to drop in OUT1 below 4.9V:
+%     endTime_vid = t_daq(min(find(OUT1_daq<4.85))) - 1./(2.*sampleRate_daq);
+% 
+%     % video start time calculated as (end time) - (video period):
+%     startTime_vid = endTime_vid - (dur_vid./rate_vid);
+% 
+%     % video time vector using frame rate and the start and end times:
+%     t_vid = startTime_vid:exposurePeriod:endTime_vid;
+% 
+%     % time vector corrected to instant in the middle of exposure
+%     t_vid = t_vid(1:end-1) + exposurePeriod/2; 
 
-    % video start time calculated as (end time) - (video period):
-    startTime_vid = endTime_vid - (dur_vid./rate_vid);
-
-    % video time vector using frame rate and the start and end times:
-    t_vid = startTime_vid:exposurePeriod:endTime_vid;
-
-    % time vector corrected to instant in the middle of exposure
-    t_vid = t_vid(1:end-1) + exposurePeriod/2; 
+    t_vid = ((-(dur_vid-postTrig_vid):postTrig_vid-1)+1).* (1./rate_vid);
 
     % check that time vector length equal to number of frames in video
     if ~(length(t_vid)==dur_vid)
         error('Time vector not same length as video');
     end
-end
+%end
 
 clear endTime_vid startTime_vid video videoFile
 
+
+%% Plot data
+
+if plotSyncData
+   figure
+   subplot(3,1,1)
+   plot(t_amp,in9,'-',t_amp,pos_amp/max(pos_amp),'r')
+   grid on
+   legend('trig','pos','Location','North')
+   title('motor data')
+   ylim([-.1 1.1])
+   m_xlim = xlim;
+   
+   subplot(3,1,2)
+   plot(t_daq,OUT1_daq,'r',t_daq,AFG_daq,'b')
+   ylabel('V')
+   d_xlim = xlim;
+   grid on
+   legend('video OUT1','AFG','Location','North')
+   title('daq data')
+   
+   subplot(3,1,3)
+   iStart = 1:length(t_vid);
+   iStart = iStart <= (dur_vid-postTrig_vid);
+   plot(t_vid(dur_vid-postTrig_vid+1),...
+       ~iStart(dur_vid-postTrig_vid+1),'ro',...
+       t_vid,~iStart,'b.'); grid on
+
+   ylabel('post stim video')
+   title('calculated frame times')
+   legend('trig frame','Location','South');
+   
+   % Set xlim
+   subplot(3,1,2)
+   xlim([min([d_xlim m_xlim]) max([d_xlim m_xlim])]) 
+   subplot(3,1,3)
+   xlim(m_xlim)
+   %subplot(3,1,1)
+   %xlim([min([d_xlim m_xlim]) max([d_xlim m_xlim])]) 
+end
 
 
 %% STORE DATA  
