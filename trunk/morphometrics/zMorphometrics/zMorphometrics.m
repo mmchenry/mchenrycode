@@ -20,15 +20,15 @@ function zMorphometrics(fileName)
 
 get_raw         = 0; % Runs interactive mode for acquiring body periphery
 calc_metrics    = 0; % Processes raw data to calc body properties
-calc_3d         = 1; % Develop 3d shape of body from data_metrics
-visualize3d     = 1; % Visualizes 3d shape
+calc_3d         = 0; % Develop 3d shape of body from data_metrics
+visualize3d     = 0; % Visualizes 3d shape
 visualizeData   = 0; % Graphs data from data_metrics
-simulateFlow    = 0; % Simulates body movement and relative flow
+simulateFlow    = 1; % Simulates body movement and relative flow
 
 %% Directories
 
-%zBaseM = '/Users/Bill/Desktop/zMorphometrics_data';
-zBaseM = '/Volumes/workgroup/relative_velocity/zMorphometrics_data';
+zBaseM = '/Users/Bill/Desktop/zMorphometrics_data';
+%zBaseM = '/Volumes/workgroup/relative_velocity/zMorphometrics_data';
 %m_fileDir = [zBaseM filesep 'm_files'];
 %m_fileDir = '/Users/Bill/Desktop/zMorphometrics';
 m_fileDir = '/Volumes/Docs/Projects/Relative velocity/zMorphometrics';
@@ -48,7 +48,7 @@ end
 
 %% Parameter values
 
-visProfiles = 0;    % Shows traced peripheries on images of larvae
+visProfiles = 1;    % Shows traced peripheries on images of larvae
 
 tolerance   = 1.e4; % Specifies the degree of smoothing of the peripheral shape of the body
 numPts_AP   = 200;  % Number of points along the antero-posterior axis
@@ -607,11 +607,13 @@ if visualize3d
     
     % Set first light
     l1 = light;
-    lightangle(l1,30,60)
+    %lightangle(l1,30,60)
+    lightangle(l1,0,-30);
     
     % Set second light
     l2 = light;
-    lightangle(l2,-30,-60);
+    %lightangle(l2,-30,-60);
+    lightangle(l2,180,30);
     
     % Set figure properties
     set(gcf,'Color',backColor);
@@ -664,7 +666,7 @@ if simulateFlow
     % Define mean body density (no SB)
     rho_noSB = mean(mP.rho_body(idx));
     
-    % Define mean body density (no SB)
+    % Define mean body density (w/ SB)
     rho_wSB = mean(mP.rho_body(~idx));
     
     % Define I (with SB)
@@ -704,6 +706,20 @@ if simulateFlow
     
     % Simulation 2: translation, with SB
     U_body2 = (1/rho_wSB) * dpdx .* t;
+    
+    %generate figure 5 d (diff in vel as a function of age at TOI)
+    load([zBaseM filesep 'body_metrics copy'])
+    TOI = 0.02; %Time of Interest (sec)
+    U_bodies = (1./mP.rho_body) .*dpdx .* TOI;
+    U_bodies_err = (1./(mP.rho_body+mP.rho_body_err)) .*dpdx .* TOI; % upper estimate 
+    U_diff = (flow_accel * TOI) - U_bodies;
+    U_diff_err = (flow_accel * TOI) - U_bodies_err;
+    
+    figure(2);
+    errorbar(mP.age_hr./24,U_diff.*1000,(U_diff*1000)-(U_diff_err*1000),'o');
+    xlabel('age');
+    ylabel('relative velocity (mm/s)');
+    clear mP
     
     % Simulation 3: rotation_________________________________
     theta  = pi/4;   % Body orientation wrt flow
