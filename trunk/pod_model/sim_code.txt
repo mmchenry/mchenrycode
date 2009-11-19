@@ -1,0 +1,308 @@
+(* Clear all variables ---------------------------------------*) 
+Off[General::"spell"];
+ClearAll["Global`*"];
+ClearMech[];
+KillMech[];
+
+
+(* Get Mechanical systems commands ---------------------------*)
+Needs["MechanicalSystems`Modeler2D`"];
+
+
+
+(*======================== IMPORT DATA ==============================*)
+
+(* Import current path ---------------------------------------*) 
+currPath = Import["/Volumes/Docs/Projects/Patek_project/pod_model/sims/curr_path.txt",
+{"Text", "Lines"}];
+
+
+(* Import parameter values -----------------------------------*)
+inParams = Import[StringJoin[currPath, "/input_params.mat"]][[1]];
+
+L1In = inParams[[1]];
+L2In = inParams[[2]];
+L3In = inParams[[3]];
+L4In = inParams[[4]];
+
+EXLocalIn = inParams[[5]];
+EYLocalIn = inParams[[6]];
+FXLocalIn = inParams[[7]];
+FYLocalIn = inParams[[8]];
+
+thetaStartIn = inParams[[9]];
+dMassIn = inParams[[10]];
+dIIn = inParams[[11]];
+kSpringIn = inParams[[12]];
+thetaRestIn = inParams[[13]];
+
+simDurationIn = inParams[[14]];
+dAIn = inParams[[15]];
+rhoIn = inParams[[16]];
+CdIn = inParams[[17]];
+
+waterIIn = inParams[[18]];
+mxErrIn  = inParams[[19]];
+
+Clear[inParams];
+
+
+(* Import time vector ---------------------------------------------*)
+tEvalIn = Import[StringJoin[currPath, "/eval_time.mat"]][[1]];
+
+
+(* Define scaling factors to help numerical stability -------------*)
+sL = 1 / L1In;
+sM = 1/dMassIn;
+sT = 10^3;
+
+
+(* Rescale input parameter values with the scale factors ----------*)
+
+dMass = dMassIn sM;
+dI = dIIn sM sL^2;
+waterI = waterIIn sM sL^2;
+
+L1 = L1In sL;
+L2 = L2In sL;
+L3 = L3In sL;
+L4 = L4In sL;
+
+EXLocal = EXLocalIn sL;
+EYLocal = EYLocalIn sL;
+FXLocal = FXLocalIn sL;
+FYLocal = FYLocalIn sL;
+thetaStart = thetaStartIn;
+
+kSpring = kSpringIn (sM sL^2/sT^2);
+thetaRest = thetaRestIn;
+dA = dAIn * sL^5;
+rho = rhoIn * sM / sL^3;
+Cd = CdIn;
+
+simDuration = simDurationIn * sT;
+tEval = tEvalIn*sT;
+
+mxErr = mxErrIn;
+
+Clear[dMassIn, dIIn, L1In, L2In, L3In, L4In, kSpringIn, thetaStartIn, thetaRestIn, EXLocalIn, EYLocalIn, FXLocalIn, FYLocalIn, simDurationIn, tEvalIn, simDurationIn, tEvalIn, dAIn, rhoIn, CdIn,waterIIn,mxErrIn]
+
+
+(*=========================== GEOMETRY ====================================*)
+
+(* Define geometry: si is the angle btwn L1 & L4 --------------------------*)
+
+si[theta_] := ArcCos[(h[theta]^2 + L1^2 - L2^2)/(2 h[theta] L1)] + ArcCos[(h[theta]^2 + L4^2 - L3^2)/(2 h[theta] L4)];
+
+h[theta_] := Sqrt[L1^2 + L2^2 - 2 L1 L2 Cos[theta]];
+
+
+(* Define appendage coordinates ------------------------------------------*)
+AX = 0;
+AY = 0;
+BX = L2 Sin[thetaStart];
+BY = L2 Cos[thetaStart];
+CX = L4 Sin[si[thetaStart]];
+CY = L1 - L4 Cos[si[thetaStart]];
+DX = 0;
+DY = L1;
+EX = BX + EXLocal;
+EY = BY - EYLocal;
+FX = BX - FXLocal;
+FY = EY - FYLocal;
+
+Clear[si,h]
+
+
+(* Define body addresses --------------------------------------------------*)
+ground = 1; mV = 2; carpus = 3; dactyl = 4;
+
+
+(* Define bodies ----------------------------------------------------------*)
+
+bd[ground] = Body[ground,
+   PointList -> {
+     (*P1*){DX, DY}},
+   InitialGuess -> {
+     {0, 0}, 0}
+   ];
+
+bd[mV] = Body[mV,
+   PointList -> {
+     (*P1*){BX, BY}},
+   InitialGuess -> {
+     {0, 0}, 0}
+   ];
+
+bd[carpus] = Body[carpus,
+      PointList -> {
+          (*P1*){ CX - BX, CY - BY},
+          (*P2*){ EX - BX, EY - BY}},
+            InitialGuess -> {
+                    {BX, BY}, 0}
+            ];
+            
+bd[dactyl] = Body[dactyl,
+         PointList -> {
+               (*P1*){FX - EX, FX - EX}},
+   Mass -> dMass,
+   Inertia -> dI+waterI,
+         InitialGuess -> {
+              {EX, EY}, 0}
+         ];
+
+SetBodies[bd[ground], bd[mV], bd[carpus], bd[dactyl]];
+
+
+
+(*=========================== CONSTRAINTS ================================*)
+
+(* Constraint 1: Pin joint between ground and mV -------------------------*)
+cs[1] = Revolute2[1, Point[ground, 0], Point[mV, 0]];
+
+(* Constraint 2: Fix position at mV joint origin (removed later) ---------*)
+cs[2] = RotationLock1[2,  mV, 0];
+
+(* Constraint 3: Pin joint between carpus and mV -------------------------*)
+cs[3] = Revolute2[3, Point[carpus, 0], Point[mV, 1]];
+
+(* Constraint 4: Fix distance between ground and top of carpus -----------*)
+cs[4] = RelativeDistance1[4, Point[carpus, 1], Point[ground, 1], L4];
+
+(* Constraint 5: Pin btwn carpus and dactyl -----------------------------*)
+cs[5] = Revolute2[5, Point[dactyl, 0], Point[carpus, 2]];
+
+(* Constraint 6: Lock rotation btwn carpus & dactyl ---------------------*)
+cs[6] = RotationLock1[6, carpus, dactyl, 0];
+
+(* Apply all constraints to the model -----------------------------------*)
+SetConstraints[cs[1], cs[2], cs[3], cs[4], cs[5], cs[6]];
+
+(* Check system ---------------------------------------------------------*)
+Print["Check system after constraints:" Evaluate[CheckSystem[]]]
+
+
+
+(*=========================== LOADS ================================*)
+
+(* Define useful moment equations ----------------------------*)
+springMoment = kSpring  (Pi/2 - Angle[mV, 1] - thetaRest);
+
+dragMoment = (-0.5*rho*Cd*(Velocity[dactyl][[3]])^2*dA)(Velocity[dactyl][[3]]/Abs[10^-20 + Velocity[dactyl][[3]]]);
+
+(* Load 1: Moment created by the spring ----------------------------*)
+ld[1] = Moment[mV, springMoment];
+
+(* Load 2: Drag moment on the dactyl -------------------------------*)
+ld[2] = Moment[dactyl,dragMoment];
+   
+(* Set loads -------------------------------------------------------*)
+SetLoads[ld[1], ld[2]]
+
+(* Check system ----------------------------------------------------*)
+Print["Check system after loads:" Evaluate[CheckSystem[]]]
+
+
+(*=========================== SOLVE ================================*)
+
+(* Remove Constraint 2 (fixed angle of the mV)  & define initial conditions *)
+fsys = SetFree[2, {Solution -> Dynamic,
+    InitialCondition -> {T -> 0, \[CapitalTheta]2d -> 0, \[CapitalTheta]3d -> 0, \[CapitalTheta]4d -> 0, X2d -> 0, Y2d -> 0, X3d -> 0, Y3d -> 0, X4d -> 0, Y4d -> 0}}];
+      
+(* Solve for kinematics in dynamic model *)      
+sol = SolveFree[fsys, simDuration, 
+  MakeRules -> {Location, Velocity, Acceleration},
+  MaxError -> mxErr]      
+      
+
+(*=========================== EXPORT ================================*)    
+
+(* P1 on carpus *)
+carp1Kine =
+  {((Location[Point[carpus, 1]] /. sol /. {T -> tEval})/
+      sL)[[1]], ((Location[Point[carpus, 1]] /. sol /. {T -> tEval})/
+      sL)[[2]],
+   ((Velocity[Point[carpus, 1]] /. sol /. {T -> tEval})/sL * 
+      sT)[[1]], ((Velocity[Point[carpus, 1]] /. sol /. {T -> tEval})/
+       sL * sT)[[2]],
+   ((Acceleration[Point[carpus, 1]] /. sol /. {T -> tEval})/sL * 
+      sT^2)[[1]], ((Acceleration[Point[carpus, 1]] /. 
+          sol /. {T -> tEval})/sL * sT^2)[[2]]
+   };
+Export[StringJoin[currPath, "/carpusP1.mat"], carp1Kine, "MAT"];
+
+
+(* P2 on carpus *)
+carp2Kine =
+  {((Location[Point[carpus, 2]] /. sol /. {T -> tEval})/
+      sL)[[1]], ((Location[Point[carpus, 2]] /. sol /. {T -> tEval})/
+      sL)[[2]],
+   ((Velocity[Point[carpus, 2]] /. sol /. {T -> tEval})/sL * 
+      sT)[[1]], ((Velocity[Point[carpus, 2]] /. sol /. {T -> tEval})/
+       sL * sT)[[2]],
+   ((Acceleration[Point[carpus, 2]] /. sol /. {T -> tEval})/sL * 
+      sT^2)[[1]], ((Acceleration[Point[carpus, 2]] /. 
+          sol /. {T -> tEval})/sL * sT^2)[[2]]
+   };
+Export[StringJoin[currPath, "/carpusP2.mat"], carp2Kine, "MAT"];
+
+
+(* P1 on ground *)
+gnd1Kine =
+  {((Location[Point[ground, 1]] /. sol /. {T -> tEval})/
+      sL)[[1]], ((Location[Point[ground, 1]] /. sol /. {T -> tEval})/
+      sL)[[2]],
+   ((Velocity[Point[ground, 1]] /. sol /. {T -> tEval})/sL * 
+      sT)[[1]], ((Velocity[Point[ground, 1]] /. sol /. {T -> tEval})/
+       sL * sT)[[2]],
+   ((Acceleration[Point[ground, 1]] /. sol /. {T -> tEval})/sL * 
+      sT^2)[[1]], ((Acceleration[Point[ground, 1]] /. 
+          sol /. {T -> tEval})/sL * sT^2)[[2]]
+   };
+Export[StringJoin[currPath, "/groundP1.mat"], gnd1Kine, "MAT"];
+
+
+(* P1 on mV *)
+mV1Kine =
+  {((Location[Point[mV, 1]] /. sol /. {T -> tEval})/
+      sL)[[1]], ((Location[Point[mV, 1]] /. sol /. {T -> tEval})/
+      sL)[[2]],
+   ((Velocity[Point[mV, 1]] /. sol /. {T -> tEval})/sL * 
+      sT)[[1]], ((Velocity[Point[mV, 1]] /. sol /. {T -> tEval})/sL * 
+      sT)[[2]],
+   ((Acceleration[Point[mV, 1]] /. sol /. {T -> tEval})/sL * 
+      sT^2)[[1]], ((Acceleration[Point[mV, 1]] /. 
+          sol /. {T -> tEval})/sL * sT^2)[[2]]
+   };
+Export[StringJoin[currPath, "/mVP1.mat"], mV1Kine, "MAT"];
+
+
+(* P1 on dactyl *)
+dac1Kine =
+  {((Location[Point[dactyl, 1]] /. sol /. {T -> tEval})/
+      sL)[[1]], ((Location[Point[dactyl, 1]] /. sol /. {T -> tEval})/
+      sL)[[2]],
+   ((Velocity[Point[dactyl, 1]] /. sol /. {T -> tEval})/sL * 
+      sT)[[1]], ((Velocity[Point[dactyl, 1]] /. sol /. {T -> tEval})/
+       sL * sT)[[2]],
+   ((Acceleration[Point[dactyl, 1]] /. sol /. {T -> tEval})/sL * 
+      sT^2)[[1]], ((Acceleration[Point[dactyl, 1]] /. 
+          sol /. {T -> tEval})/sL * sT^2)[[2]]
+   };
+Export[StringJoin[currPath, "/dactylP1.mat"], dac1Kine, "MAT"];
+
+
+(* Moment from spring *)
+springM = (springMoment
+        /. sol /. {T -> tEval})/sM/sL^2*sT^2;
+Export[StringJoin[currPath, "/springMoment.mat"], springM, "MAT"];
+
+
+(* Moment from drag *)
+dragM = (dragMoment
+        /. sol /. {T -> tEval}) /sM/sL^2*sT^2;
+Export[StringJoin[currPath, "/dragMoment.mat"], dragM, "MAT"];
+
+
+(* Quit Mathematica kernel *) 
+Exit[]
