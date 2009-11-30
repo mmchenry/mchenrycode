@@ -3,11 +3,11 @@ function default_sim
 
 
 %% Components of code to execute after simulation
-visInput    = 1; % Plots input coordinates
-animate     = 0; % Animates the simulation results
-visTorques  = 1; % Examines the forces predicted by the model
-visKine     = 1;
-visEnergy   = 1;
+visInput    = 0; % Plots input coordinates
+animate     = 1; % Animates the simulation results
+visTorques  = 0; % Examines the forces predicted by the model
+visKine     = 0;
+visEnergy   = 0;
 
 %% Define Paths
 
@@ -18,26 +18,28 @@ txtFile = ['"<</Volumes/Docs/Projects/Patek_project/pod_model/sim_code.txt"'];
 kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
 
 % Root path for simulation data
-simsPath = '/Volumes/Docs/Projects/Patek_project/pod_model/sims';
+simsPath = '/Volumes/Docs/Projects/Patek_project/sims';
 
 % Define and save current sim path
 currPath = [simsPath filesep '/s001'];
 
 % Save current path in text file
-dlmwrite([simsPath filesep 'currPath.txt'],currPath,'delimiter','%s')
+%dlmwrite([simsPath filesep 'currPath.txt'],currPath,'delimiter','%s')
 
 
 %% Define model parameter set 
 
 % Linkage coordinates (m)
-p.L1        = 5.26e-3;
-p.L2        = 2.2e-3; %3.18e-3;
-p.L3        = 0.81e-3;
-p.L4        = 4.8e-3;
-p.EXLocal   = 1.43e-3;
-p.EYLocal   = 1.64e-3;
-p.FXLocal   = 5.52e-3;
-p.FYLocal   = 4.30e-3;
+p.L1        = 4.5e-3;
+p.L2        = 3.0e-3; 
+p.L3        = 1.0e-3;
+p.L4        = 3.8e-3;
+p.L5        = 1.5e-3;
+%p.L6        = 4.0e-3;
+p.h_AF        = 0.5e-3;
+
+% Distance from E to the COM
+p.L_COM     = 5.0e-3;
 
 % Initial input angle (rad)
 p.thetaStart  = (55/180)*pi;
@@ -76,13 +78,13 @@ p.t = linspace(0,p.simDur,1000);
 % Precision of simulation (default = 10^-5, 10^-7 for high precision)
 p.maxError = 10^-7;
 
-p.currPath = currPath;
+%p.currPath = currPath;
 
 % Clear results from prior simulation within current path
-delete([currPath filesep '*.mat'])
+%delete([currPath filesep '*.mat'])
 
 % Run the model
-d = run_sim(p,txtFile,kernelPath,currPath,simsPath);
+d = run_sim(p,txtFile,kernelPath,simsPath);
 
 if isempty(d)
     error('Impossible geometry')
@@ -95,16 +97,46 @@ end
 % (The model has the ability to alter the geometry)
 
 
-
-
 if visInput
     
+
+    % Distance between B & D
+    h_BD  = sqrt(p.L1^2 + p.L2^2 - 2*p.L1*p.L2*cos(p.thetaStart));
     
-    hTmp = sqrt(p.L3^2 + p.L6^2)
+    % Angl btwn L4 & L1
+    si = acos((h_BD.^2+p.L1^2-p.L2^2)/(2*h_BD*p.L1)) + ...
+         acos((h_BD^2+p.L4^2-p.L3^2)/(2*h_BD*p.L4));
     
-    %h  = sqrt(p.L1^2 + p.L2^2 - 2*p.L1*p.L2*cos(p.thetaStart));
-    %si = acos((h.^2+p.L1^2-p.L2^2)/(2*h*p.L1));
+    % Distance between points B & F
+    h_BF    = sqrt(p.h_AF^2 + p.L2^2 + 2*p.h_AF*p.L2*cos(p.thetaStart));
     
+    % Angle btwn 5 and the x-axis
+    gamma = pi - acot(p.L5/sqrt(h_BF^2-p.L5^2))...
+               - atan(cot(p.thetaStart) + p.h_AF*csc(p.thetaStart)/p.L2);
+    
+       
+    % Define points
+    A = [0 0];
+    B = [p.L2*sin(p.thetaStart) p.L2*cos(p.thetaStart)];
+    C = [p.L4*sin(si) p.L1-p.L4*cos(si)];
+    D = [0 p.L1];
+    E = [B(1)+p.L5*cos(gamma) ...
+         B(2)-p.L5*sin(gamma)];
+    F = [0 -p.h_AF];
+    G = [E(1) - p.L_COM * sin(gamma)
+         E(2) - p.L_COM * cos(gamma)];
+       
+    figure;
+    
+    plot([A(1) B(1)],[A(2) B(2)],'r',...
+         [B(1) C(1)],[B(2) C(2)],'g',...
+         [C(1) D(1)],[C(2) D(2)],'b',...
+         [B(1) E(1)],[B(2) E(2)],'m',...
+         [E(1) F(1)],[E(2) F(2)],'m-',...
+         [E(1) G(1)],[E(2) G(2)],'k--')
+
+     axis equal
+   
     
 end
 
