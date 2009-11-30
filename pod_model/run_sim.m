@@ -1,9 +1,12 @@
-function d = run_sim(p,txtFile,kernelPath,currPath,simsPath)
-% txtPath - (string) Path to text file of Mathematica commands
-% kernelPath - (string)
-% currPath - (string)
-% simsPath - (string)
-
+function d = run_sim(p,txtFile,kernelPath,simsPath)
+% This collects parameters values, saves them to disk for the Mathematica
+% kernel to find, runs the kernel, reads the resutls from disk, and passes
+% them to the output structure d.  Takes the following inputs:
+%
+% txtPath    - (string) Path to text file of Mathematica commands
+% kernelPath - (string) Path to the Mathematica kernel
+% currPath - (string)   Current path (stores info on current sim)
+%
 
 %% Export model parameters for mathematica   
 
@@ -22,10 +25,10 @@ data(1)  = p.L1;
 data(2)  = p.L2;
 data(3)  = p.L3;
 data(4)  = p.L4;
-data(5)  = p.EXLocal;
-data(6)  = p.EYLocal;
-data(7)  = p.FXLocal;
-data(8)  = p.FYLocal;
+data(5)  = p.L5;
+data(6)  = p.h_AF;
+data(7)  = p.L_COM;
+data(8)  = 0;
 data(9)  = p.thetaStart;
 data(10) = p.dacMass;
 data(11) = p.dacI;
@@ -39,11 +42,11 @@ data(18) = p.waterI;
 data(19) = p.maxError;
 
 % Save data for use by mathematica model
-save([currPath filesep 'input_params.mat'],'data','-v4')
+save([simsPath filesep 'input_params.mat'],'data','-v4')
 
 % Save time vector for evaluating results of model
 time = p.t;
-save([currPath filesep 'eval_time.mat'],'time','-v4')
+save([simsPath filesep 'eval_time.mat'],'time','-v4')
 
 clear time data
 
@@ -61,14 +64,14 @@ disp(['. . . done (' num2str(toc) ' s)']);
 %% Load and return simulation results
 
 % Load postion data (nx6 matrix of 2d values for pos., vel., accel.)
-carp1   = importMathematica([currPath filesep 'carpusP1.mat']);
-carp2   = importMathematica([currPath filesep 'carpusP2.mat']);
-dac     = importMathematica([currPath filesep 'dactylP1.mat']);
-mV      = importMathematica([currPath filesep 'mVP1.mat']);
+carp1   = importMathematica([simsPath filesep 'carpusP1.mat']);
+carp2   = importMathematica([simsPath filesep 'carpusP2.mat']);
+dac     = importMathematica([simsPath filesep 'dactylP1.mat']);
+mV      = importMathematica([simsPath filesep 'mVP1.mat']);
 
 % Load torque data
-d.springTau = importMathematica([currPath filesep 'springMoment.mat']);
-d.dragTau   = importMathematica([currPath filesep 'dragMoment.mat']);
+d.springTau = importMathematica([simsPath filesep 'springMoment.mat']);
+d.dragTau   = importMathematica([simsPath filesep 'dragMoment.mat']);
 
 % Define time vectors
 t_d = [p.t]';
@@ -118,8 +121,16 @@ d.dacPVA    = interp1(t_d,dac,t_a);
 d.mVPVA     = interp1(t_d,mV,t_a);
 
 
+%% Delete temporary files
 
-
+delete([simsPath filesep 'input_params.mat'])
+delete([simsPath filesep 'eval_time.mat'])
+delete([simsPath filesep 'carpusP1.mat'])
+delete([simsPath filesep 'carpusP2.mat'])
+delete([simsPath filesep 'dactylP1.mat']);
+delete([simsPath filesep 'mVP1.mat']);
+delete([simsPath filesep 'springMoment.mat']);
+delete([simsPath filesep 'dragMoment.mat']);
 
 
 function data = importMathematica(filePath)

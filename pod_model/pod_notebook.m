@@ -34,14 +34,25 @@
 
 
 (* ::Input:: *)
-(*L1In=5.26 *10^-3;*)
-(*L2In=2.2 *10^-3;*)
-(*L3In=.81*10^-3;*)
-(*L4In=4.8 *10^-3;*)
-(*EXLocalIn = 1.43 *10^-3 ;*)
+(*L1In=4.5 *10^-3;*)
+(*L2In=3.0 *10^-3;*)
+(*L3In=1.0*10^-3;*)
+(*L4In=3.8 *10^-3;*)
+(*L5In=1.5 * 10^-3;*)
+(*LCOMIn = 5 * 10^-3;*)
+(*(* EXLocalIn = 1.43 *10^-3 ;*)
 (*EYLocalIn = 1.64 *10^-3 ;*)
 (*FXLocalIn = 5.52 *10^-3 ;*)
-(*FYLocalIn = 4.3 *10^-3;*)
+(*FYLocalIn = 4.3 *10^-3; *)*)
+
+
+(* ::Text:: *)
+(**)
+(*Thickness of the propodus along the y - axis*)
+
+
+(* ::Input:: *)
+(*hAFIn = 0.5 10^-3;*)
 
 
 (* ::Text:: *)
@@ -204,11 +215,14 @@
 (*L2=L2In sL;*)
 (*L3=L3In sL;*)
 (*L4=L4In  sL;*)
+(*L5=L5In sL;*)
+(*LCOM= LCOMIn sL;*)
 (**)
-(*EXLocal = EXLocalIn sL;*)
+(*(*EXLocal = EXLocalIn sL;*)
 (*EYLocal = EYLocalIn sL;*)
 (*FXLocal = FXLocalIn sL;*)
-(*FYLocal = FYLocalIn sL;*)
+(*FYLocal = FYLocalIn sL;*)*)
+(*hAFIn = hAFIn sL;*)
 (*thetaStart    = thetaStartIn;*)
 (**)
 (*kSpring = kSpringIn (sM sL^2/sT^2);*)
@@ -224,7 +238,7 @@
 
 
 (* ::Input:: *)
-(*Clear[dMassIn, dIIn,L1In,L2In,L3In,L4In,kSpringIn,TmaxIn,EXLocalIn,EYLocalIn,FXLocalIn,FYLocalIn,thetaIn,simDurationIn,tEvalIn,simDurationIn,tEvalIn,dAIn,rhoIn,CdIn,waterIIn,mxErrIn]*)
+(*Clear[dMassIn, dIIn,L1In,L2In,L3In,L4In,L5In,kSpringIn,TmaxIn,hAFIn,thetaIn,simDurationIn,tEvalIn,simDurationIn,tEvalIn,dAIn,rhoIn,CdIn,waterIIn,mxErrIn,LCOMIn]*)
 
 
 (* ::Subsection:: *)
@@ -238,10 +252,17 @@
 
 
 (* ::Input:: *)
-(*(* This angle ?*)*)
-(*si[theta_]:=ArcCos[(h[theta]^2+L1^2-L2^2)/(2 h[theta] L1)]+ArcCos[(h[theta]^2+L4^2-L3^2)/(2 h[theta] L4)];*)
-(*(* Distance btwn D & B: *)*)
-(*h[theta_]:=Sqrt[L1^2+L2^2-2 L1 L2 Cos[theta]];*)
+(*(* Distance btwn B & D *)*)
+(*hBD=Sqrt[L1^2+L2^2-2 L1 L2 Cos[thetaStart]];*)
+(**)
+(*(* This angle btwn 1 & 4 *)*)
+(*si=ArcCos[(hBD^2+L1^2-L2^2)/(2 hBD L1)]+ArcCos[(hBD^2+L4^2-L3^2)/(2 hBD L4)];*)
+(**)
+(*(* Distance btwn B & F: *)*)
+(*hBF=Sqrt[thickness^2+L2^2+2 hAF L2 Cos[thetaStart]];*)
+(**)
+(*(* Angle btwn 5 and x-axis *)*)
+(*gamma=Pi-ArcCot[L5/(hBF^2-L5^2)^0.5]-ArcTan[Cot[thetaStart]+(hAF Csc[thetaStart])/L2];*)
 
 
 (* ::Text:: *)
@@ -251,27 +272,11 @@
 
 
 (* ::Input:: *)
-(*L4  < ( L3 + h[thetaStart])*)
+(*L4  < ( L3 + hAF[thetaStart])*)
 
 
 (* ::Input:: *)
-(*h[thetaStart]*)
-
-
-(* ::Input:: *)
-(*L3*)
-
-
-(* ::Input:: *)
-(*L4*)
-
-
-(* ::Input:: *)
-(*L4  > (  h[thetaStart]-L3)*)
-
-
-(* ::Input:: *)
-(*thetaStart*)
+(*L4  > (  hAF[thetaStart]-L3)*)
 
 
 (* ::Text:: *)
@@ -285,18 +290,31 @@
 (*AY= 0;*)
 (*BX=L2 Sin[thetaStart];*)
 (*BY=L2 Cos[thetaStart];*)
-(*CX=L4 Sin[si[thetaStart]];*)
-(*CY=L1-L4 Cos[si[thetaStart]];*)
+(*CX=L4 Sin[si];*)
+(*CY=L1-L4 Cos[si];*)
 (*DX=0;*)
 (*DY=L1;*)
-(*EX =BX+ EXLocal;*)
+(*EX= BX+L5 Cos[gamma];*)
+(*EY=BY-L5 Sin[gamma];*)
+(*FX = 0;*)
+(*FY=-thickness;*)
+(*GX=EX-LCOM Sin[gamma];*)
+(*GY=EY-LCOM Cos[gamma];*)
+(**)
+(*(*EX =BX+ EXLocal;*)
 (*EY=BY - EYLocal;*)
 (*FX=BX- FXLocal;*)
-(*FY=EY-FYLocal;*)
+(*FY=EY-FYLocal;*)*)
 
 
 (* ::Input:: *)
-(*Clear[si,h]*)
+(*Clear[si,hAF,hBF]*)
+
+
+(* ::Input:: *)
+(*(* Check distances *)*)
+(*Sqrt[(BX-CX)^2+(BY-CY)^2]*)
+(*L3*)
 
 
 (* ::Text:: *)
@@ -322,7 +340,8 @@
 (*{{AX,AY},{BX,BY}},*)
 (*{{CX,CY},{DX,DY}},*)
 (*{{BX,BY},{EX,EY},{CX,CY},{BX,BY}},*)
-(*{{EX,EY},{FX,FY}}*)
+(*{{EX,EY},{FX,FY}},*)
+(*{{GX,GY},{FX,FY}}*)
 (*},*)
 (*PlotMarkers->Automatic,Joined->True,*)
 (*Frame->True,AspectRatio->Automatic,*)
@@ -332,6 +351,7 @@
 (*{Text["A",{AX-offset,AY+offset}],Text["B",{BX-offset,BY+offset}],*)
 (*Text["C",{CX+offset,CY+offset}],Text["D",{DX-offset,DY+offset}],*)
 (*Text["E",{EX+offset,EY-offset}],Text["F",{FX-offset,FY+offset}],*)
+(*Text["G",{GX-offset,GY+offset}],*)
 (*Text["L1",{Mean[{AX,DX}]-offset,Mean[{AY,DY}]}],*)
 (*Text["L2",{Mean[{AX,BX}]-offset,Mean[{AY,BY}]}+offset],*)
 (*Text["L3",{Mean[{CX,BX}]-offset,Mean[{CY,BY}]}+offset/2],*)
@@ -377,7 +397,7 @@
 (* ::Input:: *)
 (*bd[dactyl] = Body[dactyl,*)
 (*      PointList -> {*)
-(*          (*P1*){FX - EX, FX - EX}},*)
+(*          (*P1*){GX - EX, GX - EX}},*)
 (*Mass ->dMass,*)
 (*Inertia ->dI+waterI,*)
 (*Centroid->{0,0},*)

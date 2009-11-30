@@ -13,8 +13,7 @@ Needs["MechanicalSystems`Modeler2D`"];
 (*======================== IMPORT DATA ==============================*)
 
 (* Import current path ---------------------------------------*) 
-currPath = Import["/Volumes/Docs/Projects/Patek_project/pod_model/sims/curr_path.txt",
-{"Text", "Lines"}];
+currPath = "/Volumes/Docs/Projects/Patek_project/sims";
 
 
 (* Import parameter values -----------------------------------*)
@@ -25,10 +24,11 @@ L2In = inParams[[2]];
 L3In = inParams[[3]];
 L4In = inParams[[4]];
 
-EXLocalIn = inParams[[5]];
-EYLocalIn = inParams[[6]];
-FXLocalIn = inParams[[7]];
-FYLocalIn = inParams[[8]];
+L5In  = inParams[[5]];
+hAFIn = inParams[[6]];
+LCOMIn= inParams[[7]];
+
+(* inParams[[8]] skipped *)
 
 thetaStartIn = inParams[[9]];
 dMassIn = inParams[[10]];
@@ -67,11 +67,15 @@ L1 = L1In sL;
 L2 = L2In sL;
 L3 = L3In sL;
 L4 = L4In sL;
+L5 = L5In sL;
+LCOM = LCOMIn sL;
+hAF = hAFIn sL;
 
-EXLocal = EXLocalIn sL;
+(* EXLocal = EXLocalIn sL;
 EYLocal = EYLocalIn sL;
 FXLocal = FXLocalIn sL;
-FYLocal = FYLocalIn sL;
+FYLocal = FYLocalIn sL; *)
+
 thetaStart = thetaStartIn;
 
 kSpring = kSpringIn (sM sL^2/sT^2);
@@ -90,11 +94,19 @@ Clear[dMassIn, dIIn, L1In, L2In, L3In, L4In, kSpringIn, thetaStartIn, thetaRestI
 
 (*=========================== GEOMETRY ====================================*)
 
-(* Define geometry: si is the angle btwn L1 & L4 --------------------------*)
+(* Distance btwn B & D *)
+hBD = Sqrt[L1^2 + L2^2 - 2 L1 L2 Cos[thetaStart]];
 
-si[theta_] := ArcCos[(h[theta]^2 + L1^2 - L2^2)/(2 h[theta] L1)] + ArcCos[(h[theta]^2 + L4^2 - L3^2)/(2 h[theta] L4)];
+(* This angle btwn 1 & 4 *)
+si = ArcCos[(hBD^2 + L1^2 - L2^2)/(2 hBD L1)] + 
+   ArcCos[(hBD^2 + L4^2 - L3^2)/(2 hBD L4)];
 
-h[theta_] := Sqrt[L1^2 + L2^2 - 2 L1 L2 Cos[theta]];
+(* Distance btwn B & F: *)
+hBF = Sqrt[hAF^2 + L2^2 + 2 hAF L2 Cos[thetaStart]];
+
+(* Angle btwn 5 and x-axis *)
+gamma = Pi - ArcCot[L5/(hBF^2 - L5^2)^0.5] - 
+   ArcTan[Cot[thetaStart] + (hAF Csc[thetaStart])/L2];
 
 
 (* Define appendage coordinates ------------------------------------------*)
@@ -102,14 +114,16 @@ AX = 0;
 AY = 0;
 BX = L2 Sin[thetaStart];
 BY = L2 Cos[thetaStart];
-CX = L4 Sin[si[thetaStart]];
-CY = L1 - L4 Cos[si[thetaStart]];
+CX = L4 Sin[si];
+CY = L1 - L4 Cos[si];
 DX = 0;
 DY = L1;
-EX = BX + EXLocal;
-EY = BY - EYLocal;
-FX = BX - FXLocal;
-FY = EY - FYLocal;
+EX = BX + L5 Cos[gamma];
+EY = BY - L5 Sin[gamma];
+FX = 0;
+FY = -hAF;
+GX = EX - LCOM Sin[gamma];
+GY = EY - LCOM Cos[gamma];
 
 Clear[si,h]
 
@@ -144,7 +158,7 @@ bd[carpus] = Body[carpus,
             
 bd[dactyl] = Body[dactyl,
          PointList -> {
-               (*P1*){FX - EX, FX - EX}},
+               (*P1*){GX - EX, GX - EX}},
    Mass -> dMass,
    Inertia -> dI+waterI,
          InitialGuess -> {
