@@ -19,114 +19,197 @@
 
 
 
+(* ::Section::Closed:: *)
+(*Linkage geometry*)
+
+
+(* ::Input:: *)
+(*ClearAll["Global`*"];*)
+
+
+(* ::Text:: *)
+(*Input angle as a function of output angle*)
+
+
+(* ::Input:: *)
+(*L[\[CurlyPhi]_]:= Sqrt[L3^2+L4^2-2 L3 L4 Cos[\[CurlyPhi]]]*)
+
+
+(* ::Input:: *)
+(*\[Theta][\[CurlyPhi]_]:=ArcCos[(L2^2+L1^2 -L[\[CurlyPhi]]^2)/(2 L1 L2)]*)
+
+
+(* ::Text:: *)
+(*KT is equal to the ratio of output angle change to input angle change *)
+
+
+(* ::Input:: *)
+(*KT[\[CurlyPhi]_]:=1/\[Theta]'[\[CurlyPhi]]*)
+
+
+(* ::Input:: *)
+(*FullSimplify[KT[\[CurlyPhi]]]*)
+
+
+(* ::Input:: *)
+(*FullSimplify[KT[\[Pi]/2]]*)
+
+
+(* ::Input:: *)
+(*p1 = Plot[\[Theta][\[CurlyPhi]]/.{L1->1,L2->.75,L3->.2,L4->1},{\[CurlyPhi],0,Pi},PlotStyle->RGBColor[1,0,0]];*)
+(*p2= Plot[\[Theta][\[CurlyPhi]]/.{L1->1,L2->.75,L3->.1,L4->1},{\[CurlyPhi],0,Pi},PlotStyle->RGBColor[0,1,0]];*)
+(*Show[p1,p2,DisplayFunction->$DisplayFunction]*)
+
+
+(* ::Input:: *)
+(*p1=Plot[KT[\[CurlyPhi]]/.{L1->1,L2->.75,L3->.2,L4->1},{\[CurlyPhi],0,Pi},PlotStyle->RGBColor[1,0,0]];*)
+(*p2=Plot[KT[\[CurlyPhi]]/.{L1->1,L2->.75,L3->.1,L4->1},{\[CurlyPhi],0,Pi},PlotStyle->RGBColor[0,1,0]];*)
+(*Show[p1,p2,DisplayFunction->$DisplayFunction]*)
+
+
 (* ::Section:: *)
-(*Define parameter values (instead of importing)*)
+(*Heuristic model*)
 
 
 (* ::Input:: *)
 (*ClearMech[];ClearAll["Global`*"]; Needs["MechanicalSystems`Modeler2D`"];Off[General::"spell"];Off[General::"spelll"];*)
 
 
-(* ::Text:: *)
-(**)
-(**)
-(*Linkage lengths (SI units)*)
+(* ::Input:: *)
+(*pVals = {m->.003,k->15,hIn->.02,hOut ->.04,\[Theta]Initial->Pi};*)
 
 
 (* ::Input:: *)
-(*L1In=4.5 *10^-3;*)
-(*L2In=3.0 *10^-3;*)
-(*L3In=1.0*10^-3;*)
-(*L4In=3.8 *10^-3;*)
-(*L5In=1.5 * 10^-3;*)
-(*LCOMIn = 5 * 10^-3;*)
-(*(* EXLocalIn = 1.43 *10^-3 ;*)
-(*EYLocalIn = 1.64 *10^-3 ;*)
-(*FXLocalIn = 5.52 *10^-3 ;*)
-(*FYLocalIn = 4.3 *10^-3; *)*)
-
-
-(* ::Text:: *)
-(**)
-(*Thickness of the propodus along the y - axis*)
+(*\[Theta][t_]=\[Theta][t]/.DSolve[{k hIn^2 \[Theta][t]+hOut^2 m  \[Theta]''[t]==0,\[Theta]'[0]==0,\[Theta][0]==\[Theta]Initial},\[Theta][t],t][[1]]*)
 
 
 (* ::Input:: *)
-(*hAFIn = 0.5 10^-3;*)
-
-
-(* ::Text:: *)
-(**)
-(*Dactyl/propdus mass*)
+(*\[Theta]'[t]*)
 
 
 (* ::Input:: *)
-(*dMassIn = 4.53 *10^-4;*)
-
-
-(* ::Text:: *)
-(**)
-(*Dactyl/propdus moment of inertia*)
+(*FullSimplify[\[Theta]''[t]]*)
 
 
 (* ::Input:: *)
-(*dIIn= 8.16 *10^-8 ; (* (kg m^2) *)*)
-(*waterIIn = 1*10^-8;(* (kg m^2) *)*)
-
-
-(* ::Text:: *)
-(**)
-(**)
-(*Spring at the mV joint (linear spring stiffness (N/m) * L2^2 (approx. distance to force application)*)
+(*FullSimplify[m \[Theta]'[t]]*)
 
 
 (* ::Input:: *)
-(*kSpringIn =0.1 (60*10^3) (3.18 *10^-3)^2;    (* Torsion spring stiffness (Nm/rad) *)*)
-(**)
-
-
-(* ::Text:: *)
-(*Max torque estimated as max force (29 N in Zack et al paper), times L2 (3.18e-3, approximate distance to force application) *)
+(*\[Theta][t]/.pVals/.{t->1}*)
 
 
 (* ::Input:: *)
-(*thetaRestIn =  ((90-70)/180) N[\[Pi]];*)
-
-
-(* ::Text:: *)
-(**)
-(**)
-(*Duration of simulation (s)*)
+(*period=2 * Pi/(hIn Sqrt[k] )/(hOut Sqrt[m])/.pVals*)
 
 
 (* ::Input:: *)
-(*simDurationIn = 8*10^-3;*)
-
-
-(* ::Text:: *)
-(**)
-(**)
-(*Initial input angle, \[Theta]in, at the mV joint*)
+(*Plot[\[Theta][t]/.pVals,{t,0,.05}]*)
 
 
 (* ::Input:: *)
-(*thetaStartIn = ((90-35)/180) N[\[Pi]];*)
+(*Plot[\[Theta]'[t]/.pVals,{t,0,.05}]*)
+
+
+(* ::Section::Closed:: *)
+(*Heuristic model 2*)
 
 
 (* ::Input:: *)
-(*dAIn=1.5 * 10^-11;*)
-(*rhoIn=998;*)
-(*CdIn = 0*1;*)
-
-
-(* ::Text:: *)
-(**)
-(**)
-(*Check that the geometry is possible (both should be 'True')*)
+(*ClearMech[];ClearAll["Global`*"]; Needs["MechanicalSystems`Modeler2D`"];Off[General::"spell"];Off[General::"spelll"];*)
 
 
 (* ::Input:: *)
-(*mxErrIn = 10^-5;*)
+(*pVals = {m->.003,k->15,hIn->.02,hOut ->.04,\[Theta]Initial->Pi,B->1};*)
+
+
+(* ::Input:: *)
+(*\[Theta][t_]=\[Theta][t]/.DSolve[{k ( hIn-B \[Theta][t])^2 \[Theta][t]+hOut^2 m  \[Theta]''[t]==0,\[Theta]'[0]==0,\[Theta][0]==\[Theta]Initial},\[Theta][t],t][[1]];*)
+
+
+(* ::Input:: *)
+(*Plot[\[Theta]'[t]/.pVals,{t,0,.05}]*)
+
+
+(* ::Section:: *)
+(*Heuristic model with linear change in in-lever*)
+
+
+(* ::Input:: *)
+(*ClearMech[];ClearAll["Global`*"]; Needs["MechanicalSystems`Modeler2D`"];Off[General::"spell"];Off[General::"spelll"];*)
+
+
+(* ::Input:: *)
+(*numLs = 5;*)
+(*pVals = {m->1,k->1,hIn->.5,hOut ->1,\[Theta]Initial->Pi,B->.1};*)
+(*tSim = 10;*)
+
+
+(* ::Input:: *)
+(*\[Theta]N[t_]=\[Theta][t]/.NDSolve[{k ( hIn-B t)^2 \[Theta][t]+hOut^2 m  \[Theta]''[t]==0,\[Theta]'[0]==0,\[Theta][0]==\[Theta]Initial}*)
+(*/.pVals,\[Theta],{t,0,tSim}][[1]];*)
+
+
+(* ::Input:: *)
+(*\[Theta][t_]=\[Theta][t]/.DSolve[{k hIn^2 \[Theta][t]+hOut^2 m  \[Theta]''[t]==0,\[Theta]'[0]==0,\[Theta][0]==\[Theta]Initial},\[Theta][t],t][[1]];*)
+
+
+(* ::Input:: *)
+(*Plot[{\[Theta][t]/.pVals,\[Theta]N[t]},{t,0,tSim}]*)
+
+
+(* ::Input:: *)
+(*Plot[{\[Theta]'[t]/.pVals,\[Theta]N'[t]},{t,0,tSim}]*)
+
+
+(* ::Input:: *)
+(*Plot[ (hIn-B t)/.pVals,{t,0,tSim}]*)
+
+
+(* ::Section:: *)
+(*Heuristic model with nonlinear in-lever (unfinished)*)
+
+
+(* ::Input:: *)
+(*ClearMech[];ClearAll["Global`*"]; Needs["MechanicalSystems`Modeler2D`"];Off[General::"spell"];Off[General::"spelll"];*)
+
+
+(* ::Input:: *)
+(*numLs = 5;*)
+(*pVals = {m->.003,k->15,hOut->.04,\[Theta]Initial->Pi};*)
+(*lVals = {L1->1,L2->.75,L4->1};*)
+
+
+(* ::Input:: *)
+(*KT[\[CurlyPhi]_]:=(L1 L2 Sqrt[1-(L1^2+L2^2-L3^2-L4^2+2 L3 L4 Cos[\[CurlyPhi]])^2/(4 L1^2 L2^2)] Csc[\[CurlyPhi]])/(L3 L4)*)
+
+
+(* ::Input:: *)
+(*KTval[\[Theta]_]=KT[ .9\[Theta]+Pi/50]/.lVals;*)
+
+
+(* ::Input:: *)
+(*L3vals = Range[.2*.5,.2*1.5,.2 (1.5-0.5)/numLs];*)
+(*dataList={};*)
+
+
+(* ::Input:: *)
+(*For [i=1,i<numLs+1,*)
+(*	L3=L3vals[[i]];*)
+(*\[Theta][t_]=\[Theta][t]/.NDSolve[{k (hOut/KTval[\[Theta][t]])^2 \[Theta][t]+hOut^2 m  \[Theta]''[t]==0,\[Theta]'[0]==0,\[Theta][0]==\[Theta]Initial}*)
+(*/.pVals,\[Theta],{t,0,2}][[1]];*)
+(*dataList=Append[dataList,{Log[KT[Pi/2]/.lVals,10],Log[Max[\[Theta]'[t]/.{t->Table[t,{t,0,2,2/1000}]}],10]}];*)
+(*Clear[\[Theta]];*)
+(*i++]*)
+(**)
+
+
+(* ::Input:: *)
+(*line=Fit[dataList,{1,x},x]*)
+
+
+(* ::Input:: *)
+(*Show[ListPlot[dataList,PlotStyle->Red],Plot[line,{x,1.,2.4}]]*)
 
 
 (* ::Section::Closed:: *)
@@ -187,10 +270,102 @@
 
 
 (* ::Section:: *)
-(*Linkage model *)
+(*Define parameter values (instead of importing)*)
 
 
-(* ::Subsection:: *)
+(* ::Input:: *)
+(*ClearMech[];ClearAll["Global`*"]; Needs["MechanicalSystems`Modeler2D`"];Off[General::"spell"];Off[General::"spelll"];*)
+
+
+(* ::Input:: *)
+(*(* Linakage coordinates *)*)
+(*L1In=4.5 *10^-3;*)
+(*L2In=.75*3.0 *10^-3;*)
+(*L3In=.75*10^-3;*)
+(*L4In=3.8 *10^-3;*)
+(*L5In=2* 10^-3;*)
+
+
+(* ::Input:: *)
+(*(* Distance between points A&F,determined by propodus thickness *)*)
+(*hAFIn = 0.2 10^-3;*)
+
+
+(* ::Input:: *)
+(*(* Distance from E to COM *)*)
+(*LCOMIn = 5 * 10^-3;*)
+
+
+(* ::Input:: *)
+(*(* Initial input angle (rad) *)*)
+(*thetaStartIn = (55/180) N[\[Pi]];*)
+
+
+(* ::Input:: *)
+(*(* Dactyl mass (kg) *)*)
+(*dMassIn = 4.53 *10^-4 ;*)
+
+
+(* ::Input:: *)
+(*(* Dactyl I (kg m^2) *)*)
+(*dIIn= 8.16 *10^-8 ;*)
+
+
+(* ::Input:: *)
+(*(* Water I (kg m^2) *)*)
+(*waterIIn = 1*10^-8;*)
+
+
+(* ::Input:: *)
+(*(* 3rd moment of area of dactyl *)*)
+(*dAIn=1.5 * 10^-11;*)
+
+
+(* ::Input:: *)
+(*(* Drag coefficient of elliptical dactyl element *)*)
+(*CdIn = 0*1;*)
+
+
+(* ::Input:: *)
+(*(* Torsion spring at mV joint (Nm/rad) *)*)
+(*kSpringIn = (60*10^3) (3.18 *10^-3)^2;   *)
+
+
+(* ::Input:: *)
+(*(* Resting position for torsion spring *)*)
+(*thetaRestIn =  (85/180) N[\[Pi]];*)
+
+
+(* ::Input:: *)
+(*(* Density of water (kg/m^3) *)*)
+(*rhoIn=998;*)
+
+
+(* ::Input:: *)
+(*(* Duration of simulation (s) *)*)
+(*simDurationIn = 4*10^-3;*)
+
+
+(* ::Input:: *)
+(*(* Time values to evaluate results *)*)
+(*tEvalIn = Table[N[i],{i,0,simDurationIn,simDurationIn/1000}];*)
+
+
+(* ::Input:: *)
+(*(* Precision of simulation *)*)
+(*mxErrIn = 10^-5;*)
+
+
+(* ::Input:: *)
+(*(* Designate current path *)*)
+(*currPath="/Volumes/Docs/Projects/Patek_project/sims";*)
+
+
+(* ::Section:: *)
+(*Phenomeological model *)
+
+
+(* ::Subsection::Closed:: *)
 (*Rescale input parameter values*)
 
 
@@ -222,7 +397,7 @@
 (*EYLocal = EYLocalIn sL;*)
 (*FXLocal = FXLocalIn sL;*)
 (*FYLocal = FYLocalIn sL;*)*)
-(*hAFIn = hAFIn sL;*)
+(*hAF = hAFIn sL;*)
 (*thetaStart    = thetaStartIn;*)
 (**)
 (*kSpring = kSpringIn (sM sL^2/sT^2);*)
@@ -259,7 +434,7 @@
 (*si=ArcCos[(hBD^2+L1^2-L2^2)/(2 hBD L1)]+ArcCos[(hBD^2+L4^2-L3^2)/(2 hBD L4)];*)
 (**)
 (*(* Distance btwn B & F: *)*)
-(*hBF=Sqrt[thickness^2+L2^2+2 hAF L2 Cos[thetaStart]];*)
+(*hBF=Sqrt[hAF^2+L2^2+2 hAF L2 Cos[thetaStart]];*)
 (**)
 (*(* Angle btwn 5 and x-axis *)*)
 (*gamma=Pi-ArcCot[L5/(hBF^2-L5^2)^0.5]-ArcTan[Cot[thetaStart]+(hAF Csc[thetaStart])/L2];*)
@@ -272,11 +447,15 @@
 
 
 (* ::Input:: *)
-(*L4  < ( L3 + hAF[thetaStart])*)
+(*L4  < ( L3 + hBD)*)
 
 
 (* ::Input:: *)
-(*L4  > (  hAF[thetaStart]-L3)*)
+(*L4  > (  hBD-L3)*)
+
+
+(* ::Input:: *)
+(*hBF>L5*)
 
 
 (* ::Text:: *)
@@ -297,7 +476,7 @@
 (*EX= BX+L5 Cos[gamma];*)
 (*EY=BY-L5 Sin[gamma];*)
 (*FX = 0;*)
-(*FY=-thickness;*)
+(*FY=-hAF;*)
 (*GX=EX-LCOM Sin[gamma];*)
 (*GY=EY-LCOM Cos[gamma];*)
 (**)
@@ -360,7 +539,7 @@
 (*]*)
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Define Bodies*)
 
 
@@ -397,7 +576,7 @@
 (* ::Input:: *)
 (*bd[dactyl] = Body[dactyl,*)
 (*      PointList -> {*)
-(*          (*P1*){GX - EX, GX - EX}},*)
+(*          (*P1*){GX - EX, GY - EY}},*)
 (*Mass ->dMass,*)
 (*Inertia ->dI+waterI,*)
 (*Centroid->{0,0},*)
@@ -410,7 +589,7 @@
 (*SetBodies[bd[ground],bd[mV],bd[carpus],bd[dactyl]];*)
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Define constraints*)
 
 
@@ -506,7 +685,7 @@
 (*Evaluate[{Angle[mV,1]}/.SolveMech[]] (180/\[Pi])*)
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Define Loads*)
 
 
@@ -516,7 +695,7 @@
 
 
 (* ::Input:: *)
-(*springMoment=-kSpring  ( Angle[mV,1]-thetaRest);*)
+(*springMoment=kSpring  ( Pi/2 -Angle[mV,1]-thetaRest);*)
 (*dragMoment=(-0.5*rho*Cd*(Velocity[dactyl][[3]])^2*dA) (Velocity[dactyl][[3]]/Abs[10^-20+Velocity[dactyl][[3]]]);*)
 
 
@@ -553,7 +732,7 @@
 (*Print["Check system after loads:" Evaluate[CheckSystem[]]]*)
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Find solution*)
 
 
@@ -625,6 +804,10 @@ Frame -> True, AspectRatio -> Automatic, GridLines -> Automatic];
 
 
 (* ::Input:: *)
+(*EY*)
+
+
+(* ::Input:: *)
 (*Show[graph/.(sol/.{T->0*simDuration})]*)
 
 
@@ -640,23 +823,6 @@ Frame -> True, AspectRatio -> Automatic, GridLines -> Automatic];
 (*Graph results*)
 
 
-(* ::Text:: *)
-(**)
-(*Theta (angle btwn mV and ground (L1))*)
-
-
-(* ::Input:: *)
-(*(180/Pi) Angle[mV,1]/.sol/.{T->0} *)
-
-
-(* ::Input:: *)
-(*thetaStart (180/Pi)*)
-
-
-(* ::Input:: *)
-(*thetaRest*)
-
-
 (* ::Input:: *)
 (*Plot[{(springMoment/.sol),T*0},{T,0,simDuration}]*)
 
@@ -666,30 +832,11 @@ Frame -> True, AspectRatio -> Automatic, GridLines -> Automatic];
 
 
 (* ::Input:: *)
-(*(* Moment on mV *)*)
-(*Plot[(180/Pi)((Angle[mV,1])-(Pi/2-thetaRest))/.sol,{T,0,simDuration}]*)
+(*Plot[(180/Pi)(Angle[mV,1])/.sol,{T,0,simDuration}]*)
 
 
 (* ::Input:: *)
-(*(180/Pi)thetaRest*)
-
-
-(* ::Input:: *)
-(*springMoment/.sol/.{T->0}*)
-
-
-(* ::Input:: *)
-(*(Pi/2-Angle[mV,1]-thetaRest)kSpring/.sol/.{T->0}*)
-
-
-(* ::Input:: *)
-(*(* Moment on mV *)*)
-(*Plot[{(180/Pi)(Angle[mV,1])/.sol,0 T+(180/Pi) thetaRest},{T,0,simDuration}]*)
-
-
-(* ::Input:: *)
-(*(* Moment on mV *)*)
-(*Plot[{(180/Pi)(Pi/2-Angle[mV,1]-thetaRest)/.sol,0 T},{T,0,simDuration}]*)
+(*Plot[(180/Pi)(Angle[dactyl,1])/.sol,{T,0,simDuration}]*)
 
 
 (* ::Input:: *)
@@ -739,7 +886,7 @@ Frame -> True, AspectRatio -> Automatic, GridLines -> Automatic];
 (*springPlot=Plot[springEnergy,{T,0,simDuration},DisplayFunction->Identity,PlotStyle->{RGBColor[0, 0,1]}];*)
 (*totPlot=Plot[totEnergy,{T,0,simDuration},DisplayFunction->Identity,PlotStyle->{RGBColor[0, 0,0]}];*)
 (**)
-(*Show[springPlot,kinePlot,totPlot,DisplayFunction->$DisplayFunction]*)
+(*Show[totPlot,kinePlot,springPlot,DisplayFunction->$DisplayFunction]*)
 
 
 (* ::Input:: *)
@@ -747,10 +894,6 @@ Frame -> True, AspectRatio -> Automatic, GridLines -> Automatic];
 (*springPlot=Plot[springEnergy[T]/.sol,{T,0,simDuration},DisplayFunction->Identity,PlotStyle->{RGBColor[0, 0,1],Dashed}];*)
 (*totPlot=Plot[(kineEnergy[T]+springEnergy[T])/.sol,{T,0,simDuration},DisplayFunction->Identity,PlotStyle->{RGBColor[0, 0,0]}];*)
 (*Show[springPlot,kinePlot,totPlot,DisplayFunction->$DisplayFunction]*)
-
-
-(* ::Input:: *)
-(*springEnergy[T]/.sol/.{T->3}*)
 
 
 (* ::Subsection:: *)
@@ -821,4 +964,11 @@ Frame -> True, AspectRatio -> Automatic, GridLines -> Automatic];
 (*Export[StringJoin[currPath, "/dragMoment.mat"],dragM,"MAT"];*)
 
 
+(* ::Input:: *)
+(*(* mV angle*)*)
+(*Export[StringJoin[currPath, "/mvAng.mat"],Angle[mV,1]/.sol/.{T->tEval},"MAT"];*)
 
+
+(* ::Input:: *)
+(*(* dactyl angle*)*)
+(*Export[StringJoin[currPath, "/dacAng.mat"],Angle[mV,1]/.sol/.{T->tEval},"MAT"];*)
