@@ -1,4 +1,4 @@
-function d = run_sim(p,txtFile,kernelPath,simsPath)
+function [d,result] = run_sim(p,echoData)
 % This collects parameters values, saves them to disk for the Mathematica
 % kernel to find, runs the kernel, reads the resutls from disk, and passes
 % them to the output structure d.  Takes the following inputs:
@@ -8,17 +8,43 @@ function d = run_sim(p,txtFile,kernelPath,simsPath)
 % currPath - (string)   Current path (stores info on current sim)
 %
 
-%% Export model parameters for mathematica   
+result = {};
 
-% Check input geometry - return empty "d", if geometry not possible
-h  = sqrt(p.L1^2 + p.L2^2 - 2*p.L1*p.L2*cos(p.thetaStart));
-%     si = acos((h^2+p.L1^2-p.L2^2)/(2*h*p.L1)) + ...
-%          acos((h^2+p.L4^2-p.L3^2)/(2*h*p.L4));
+if nargin < 2
+    echoData = 1;
+end
 
-if (p.L4 > (p.L3 + h)) || (p.L4 < h-p.L3)
+%% Check input geometry - return empty "d", if geometry not possible
+
+L = check_linkage(p,0);
+
+% Report problems with the geometry
+if (p.thetaStart < L.thetaInMin)
+    result{length(result)+1} = ...
+     'Starting thetaIn value below what is possible for linkage geometry';
+
+elseif (p.thetaStart > L.thetaInMax)
+   result{length(result)+1} = ...
+     'Starting thetaIn value above what is possible for linkage geometry';  
+end
+
+if isempty(L)
+    result{length(result)+1} = ...
+     'No range of motion possible for requested geomtry';  
+end
+
+% Stop execution if there is a reported problem
+if ~isempty(result)
     d = [];
+    warning(result)
+    disp('No simulation run')
     return
 end
+
+clear h_BD si h_BF gamma A B C D E F G 
+
+
+%% Export model parameters for mathematica   
 
 % The order of these inputs must be consistent with 'sim_code.txt'
 data(1)  = p.L1;
@@ -42,95 +68,132 @@ data(18) = p.waterI;
 data(19) = p.maxError;
 
 % Save data for use by mathematica model
-save([simsPath filesep 'input_params.mat'],'data','-v4')
+save([p.simsPath filesep 'input_params.mat'],'data','-v4')
 
 % Save time vector for evaluating results of model
 time = p.t;
-save([simsPath filesep 'eval_time.mat'],'time','-v4')
+save([p.simsPath filesep 'eval_time.mat'],'time','-v4')
 
 clear time data
 
 
-%% Run sim code
+%% Run sim code with mathematica kernel
 
-disp(' ')
-disp(['Executing ' txtFile ' . . .'])
-tic
-[status,result] = unix([kernelPath ' -noprompt -run ' txtFile]);
-disp(result)
-disp(['. . . done (' num2str(toc) ' s)']);
+if echoData
+    disp(' ')
+    disp(['Executing ' txtFile ' . . .'])
+    tic
+end
 
+[status,res_text] = unix([p.kernelPath ' -noprompt -run ' p.mathFile]);
+
+if echoData
+    disp(['. . . done (' num2str(toc) ' s)']);
+end
 
 %% Load and return simulation results
 
-% Load postion data (nx6 matrix of 2d values for pos., vel., accel.)
-carp1   = importMathematica([simsPath filesep 'carpusP1.mat']);
-carp2   = importMathematica([simsPath filesep 'carpusP2.mat']);
-dac     = importMathematica([simsPath filesep 'dactylP1.mat']);
-mV      = importMathematica([simsPath filesep 'mVP1.mat']);
+% Load coordinate data (nx6 matrix of 2d values for pos., vel., accel.)
+carp1   = importMathematica([p.simsPath filesep 'carpusP1.mat']);
+carp2   = importMathematica([p.simsPath filesep 'carpusP2.mat']);
+dac     = importMathematica([p.simsPath filesep 'dactylP1.mat']);
+mV      = importMathematica([p.simsPath filesep 'mVP1.mat']);
+gnd     = importMathematica([p.simsPath filesep 'groundP1.mat']);
+
+% Load angular data
+%mV_ang  = importMathematica([p.simsPath filesep 'mvAng.mat']);
+%dac_ang = importMathematica([p.simsPath filesep 'dacAng.mat']);
 
 % Load torque data
-d.springTau = importMathematica([simsPath filesep 'springMoment.mat']);
-d.dragTau   = importMathematica([simsPath filesep 'dragMoment.mat']);
+springTau = importMathematica([p.simsPath filesep 'springMoment.mat']);
+dragTau   = importMathematica([p.simsPath filesep 'dragMoment.mat']);
+
+% Calculate mV angular position
+mVAng  = unwrap(atan2(mV(:,2),mV(:,1)));
+
+% Calculate input angle
+thetaIn  = unwrap(pi/2 - mVAng);
+
+% Calculate output angle
+h_BD  = sqrt(p.L1^2 + p.L2^2 - 2*p.L1*p.L2*cos(thetaIn));
+thetaOut = real(acos((p.L3^2+p.L4^2-h_BD.^2)./(2*p.L3*p.L4)));
+
+dacAng = unwrap(atan2(dac(:,2)-carp2(:,2),dac(:,1)-carp2(:,1)));
+
+% Trim data beyond where output angle approaches maximum range of motion
+if max(thetaOut > 0.97*L.thetaOutMax) > 0
+    idx = 1:find(thetaOut > 0.97*L.thetaOutMax,1);
+else
+    idx = 1:length(thetaOut);
+end
 
 % Define time vectors
-t_d = [p.t]';
+t_d = [p.t(idx)]';
 t_v = t_d(1:end-1,1);
 t_a = t_d(2:end-1,1);
 
-% Store time vector to evaluate results
+% Store time vector for results
 d.t = t_a;
 
-% Calculate mV angular displacement, vel., accel.
-d.mVAng         = atan2(mV(:,2),mV(:,1));
-d.mVAngVel      = diff(d.mVAng)./diff(t_d);
-d.mVAngAccel    = diff(d.mVAngVel)./diff(t_v);
+% Calculate angular velocity
+dacAngSpd = diff(dacAng(idx))./diff(t_d);
 
-% Interpolate mV data to t_a
-d.mVAng     = interp1(t_d,d.mVAng,t_a);
-d.mVAngVel  = interp1(t_v,d.mVAngVel,t_a);
+% Calculate dactyl speed
+dacCOMSpd      = sqrt(diff(dac(idx,1)).^2 + diff(dac(idx,2)).^2)./diff(t_d);
+dacBaseSpd     = sqrt(diff(carp2(idx,1)).^2 + diff(carp2(idx,2)).^2)./diff(t_d);
 
-% Calculate dactyl kinematics
-d.dacAng      = atan2(dac(:,2)-carp2(:,2),dac(:,1)-carp2(:,1));
-d.dacAngVel   = diff(d.dacAng)./diff(t_d);
-d.dacAngAccel = diff(d.dacAngVel)./diff(t_v);
-d.dacSpd      = sqrt(diff(carp2(:,1)).^2 + diff(carp2(:,2)).^2)./diff(t_d);
+%d.mVAngVel      = diff(d.mVAng)./diff(t_d);
+%d.mVAngAccel    = diff(d.mVAngVel)./diff(t_v);
 
-% Interpolate dactyl data wrt t_a
-d.dacAng     = interp1(t_d,d.dacAng,t_a);
-d.dacAngVel  = interp1(t_v,d.dacAngVel,t_a);
-d.dacSpd     = interp1(t_v,d.dacSpd,t_a);
+% Interpolate angular data
+d.thetaIn   = interp1(t_d,thetaIn(idx),t_a);
+d.thetaOut  = interp1(t_d,thetaOut(idx),t_a);
+
+% Interpolate speed data
+d.dacAngSpd  = interp1(t_v,dacAngSpd(idx(1:end-1)),t_a);
+d.dacCOMSpd  = interp1(t_v,dacCOMSpd(idx(1:end-1)),t_a);
+d.dacBaseSpd = interp1(t_v,dacBaseSpd(idx(1:end-1)),t_a);
 
 % Interpolate torque data
-d.springTau   = interp1(t_d,d.springTau,t_a);
-d.dragTau     = interp1(t_d,d.dragTau,t_a);
+d.springTau   = interp1(t_d,springTau(idx),t_a);
+d.dragTau     = interp1(t_d,dragTau(idx),t_a);
 
 % Calculate elastic energy (assumes negative displacement of mV)
-d.E_elastic  = abs(0.5 .* d.springTau .* (pi/2-d.mVAng-p.thetaRest));
+d.E_elastic  = abs(0.5 .* d.springTau .* (d.thetaIn-p.thetaRest));
 
 % Calculate drag energy
-d.E_drag = cumtrapz(abs(d.dacAng(1)-d.dacAng),abs(d.dragTau));
+d.E_drag = cumtrapz(abs(d.thetaOut(1)-d.thetaOut),abs(d.dragTau));
 
 % Calculate kinetic energy
-d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.dacAngVel.^2) + (0.5 * p.dacMass .* d.dacSpd.^2);
+d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.dacAngSpd.^2) + ...
+          (0.5 * p.dacMass .* d.dacBaseSpd.^2);
     
 % Interpolate position/velocity/acceleration data
-d.carp1PVA  = interp1(t_d,carp1,t_a);
-d.carp2PVA  = interp1(t_d,carp2,t_a);
-d.dacPVA    = interp1(t_d,dac,t_a);
-d.mVPVA     = interp1(t_d,mV,t_a);
+d.carp1PVA  = interp1(t_d,carp1(idx,:),t_a);
+d.carp2PVA  = interp1(t_d,carp2(idx,:),t_a);
+d.dacPVA    = interp1(t_d,dac(idx,:),t_a);
+d.mVPVA     = interp1(t_d,mV(idx,:),t_a);
+d.gndPVA    = gnd;
+d.KT        = (p.L1*p.L2)/(p.L3*p.L4) .* csc(d.thetaOut) .* ...
+              sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(d.thetaOut)).^2) ...
+              ./ (4*p.L1^2 *p.L2^2));
 
 
-%% Delete temporary files
+%% Delete temporary files from disk
 
-delete([simsPath filesep 'input_params.mat'])
-delete([simsPath filesep 'eval_time.mat'])
-delete([simsPath filesep 'carpusP1.mat'])
-delete([simsPath filesep 'carpusP2.mat'])
-delete([simsPath filesep 'dactylP1.mat']);
-delete([simsPath filesep 'mVP1.mat']);
-delete([simsPath filesep 'springMoment.mat']);
-delete([simsPath filesep 'dragMoment.mat']);
+delete([p.simsPath filesep 'input_params.mat'])
+delete([p.simsPath filesep 'eval_time.mat'])
+delete([p.simsPath filesep 'carpusP1.mat'])
+delete([p.simsPath filesep 'carpusP2.mat'])
+delete([p.simsPath filesep 'dactylP1.mat']);
+delete([p.simsPath filesep 'mVP1.mat']);
+delete([p.simsPath filesep 'springMoment.mat']);
+delete([p.simsPath filesep 'dragMoment.mat']);
+delete([p.simsPath filesep 'groundP1.mat']);
+
+
+%% Update result text
+result{1} = res_text;
 
 
 function data = importMathematica(filePath)
