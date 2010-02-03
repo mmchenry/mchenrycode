@@ -5,9 +5,10 @@ function poolData(mPath)
 
 %% Options for what to run
 
-runCollect  = 1;
-runPlotting = 1;
-runStats    = 1;
+runCollect   = 0;
+runPlotting1 = 0;
+runPlotting2 = 1;
+runStats     = 0;
 
 
 %% Define directories
@@ -69,12 +70,16 @@ end
 %% Collect data from all sequences
 
 if runCollect
+      
+    % Latency threshold (distinguishes early and late responses)
+    latThresh = 40e-3;
     
     % Initiate k
     k = 1;
     
     % Initiate frequency matrix
-    f = zeros(3,3,2);   
+    f  = zeros(3,3,2); 
+    fE = zeros(3,3,2); 
     
     % Initiate L, structure of latency values
     L.d_toward = [];
@@ -83,9 +88,18 @@ if runCollect
     L.a_beat   = [];
     L.a_glide  = [];
     L.a_still  = [];
+    L.info     = 'd - direction   a - activity';
     
+    % Pooled data used for regression analysis
+    L.pooled.angle = [];
+    L.pooled.latency = [];
+    L.pooled.faststart = [];
+
     % Loop through batches
     for i = 1:length(batch)
+        
+        % Initialize 'latency'
+        latency = [];
         
         % Locate faststart_data.mat
         fileDir = dir([mPath filesep batch{i}.filename filesep 'faststart_data.mat']);
@@ -109,7 +123,8 @@ if runCollect
                    isempty(c(j).left_eye) || ...
                    isempty(c(j).right_eye) || ...
                    isempty(c(j).swimming) 
-               
+                    
+                    % Note if data don't exist
                     warning(['No data for larva ' num2str(j) ' in ' ...
                         batch{i}.filename]);
                     
@@ -145,8 +160,8 @@ if runCollect
                     % Calculate angle
                     theta = (180/pi) * acos(dot(eyeVector,flowVector)/...
                         norm(eyeVector)*norm(flowVector));
-       %TODO: Change these categories             
-                    if (theta > 0) && (theta <= 60)
+                    
+                    if (theta >= 0) && (theta <= 60)
                         direction = 'toward';
                     elseif (theta > 60) && (theta <= 120)
                         direction = 'side  ';
@@ -154,7 +169,7 @@ if runCollect
                         direction = 'away  ';
                     end
                     
-                    % Calculate latency
+                    % Calculate latency in recording
                     [amp,daq,vid] = synchronizeData(...
                                         [mPath filesep batch{i}.filename],0);
                     preTrig_frms  = vid.dur - vid.postTrg;
@@ -165,9 +180,9 @@ if runCollect
                     % If no fast start
                     if start_frm==0
                         
-                        fast_start = 2;
+                        fast_start = 2; % This codes for a non-response
                     
-                    % If fast start, calculate latency
+                    % If fast start, calculate latency of response
                     else
   
                         % Latency is the video time for the frame at which
@@ -181,7 +196,9 @@ if runCollect
                                 batch{i}.filename ...
                                 ' is before stimulus '...
                                 '-- not recorded']);
-                            fast_start = 0;
+                            
+                            fast_start = 0; % This response won't be recorded
+                            
                         else
                             
                             % Store data for latency ANOVA
@@ -191,6 +208,10 @@ if runCollect
                             s.latency(k,1)    = latency;
                             
                             k = k + 1;
+                            
+                            % Store pooled latency data
+                            L.pooled.angle = [L.pooled.angle; theta];
+                            L.pooled.latency = [L.pooled.latency; latency];
                             
                             % Store data for latency plotting
                             if strcmp(direction,'toward')
@@ -219,36 +240,18 @@ if runCollect
                     % Record response (or non-response)
                     if (fast_start==1) || (fast_start==2)             
                         
-                        if strcmp(c(j).swimming,'beats')
-                            if strcmp(direction,'toward')
-                                f(1,1,fast_start) = f(1,1,fast_start) + 1;
-                            elseif strcmp(direction, 'side  ')
-                                f(1,2,fast_start) = f(1,2,fast_start) + 1;
-                            elseif strcmp(direction, 'away  ')
-                                f(1,3,fast_start) = f(1,3,fast_start) + 1;
-                            end
-                        elseif strcmp(c(j).swimming,'glide')
-                            if strcmp(direction,'toward')
-                                f(2,1,fast_start) = f(2,1,fast_start) + 1;
-                            elseif strcmp(direction, 'side  ')
-                                f(2,2,fast_start) = f(2,2,fast_start) + 1;
-                            elseif strcmp(direction, 'away  ')
-                                f(2,3,fast_start) = f(2,3,fast_start) + 1;
-                            end
-                        elseif strcmp(c(j).swimming,'still')
-                            if strcmp(direction,'toward')
-                                f(3,1,fast_start) = f(3,1,fast_start) + 1;
-                            elseif strcmp(direction, 'side  ')
-                                f(3,2,fast_start) = f(3,2,fast_start) + 1;
-                            elseif strcmp(direction, 'away  ')
-                                f(3,3,fast_start) = f(3,3,fast_start) + 1;
-                            end
-                        end
+                        f = scoreReponse(f,fast_start,c(j),direction);
                         
                     end                           
                     
+                    % Record response, but ignore late responders
+                    if ((fast_start==1) || (fast_start==2)) ...
+                        && (~isempty(latency) && latency < latThresh)                        
+                        fE = scoreReponse(fE,fast_start,c(j),direction);                         
+                    end
+                    
                     clear amp daq vid fast_start
-                    clear direction theta latency
+                    clear direction theta 
                     
                 end
             end            
@@ -257,14 +260,15 @@ if runCollect
     
     save([mPath filesep 'ANOVA_data.mat'],'s')
     save([mPath filesep 'probability_data.mat'],'f')
+    save([mPath filesep 'probability_data_early.mat'],'fE')
     save([mPath filesep 'latency_data.mat'],'L')
     
 end
 
 
-%% Visualize results
+%% Visualize results: group data
 
-if runPlotting
+if runPlotting1
     
     % Load L, latency data
     load([mPath filesep 'latency_data.mat'])
@@ -273,137 +277,55 @@ if runPlotting
     load([mPath filesep 'probability_data.mat'])
     load([mPath filesep 'ANOVA_data.mat'])
     
-    % Parameters for plotting
-    %yTicksL = (floor(min(1000.*s.latency)):10:ceil(max(1000.*s.latency)))./1000;
-    yTicksP = 0:.5:1;
-    txtOffLatency = .004;
-    txtOffProb = 0.05;
     
-    % Calculate probability stats
-    [pToward,iToward] = binofit(sum(f(:,1,1)),sum(sum(f(:,1,:))));
-    iToward = iToward(2) - pToward;
+    plotProbablityData(f)
+    plotLatencyData(L);
     
-    [pAway,iAway] = binofit(sum(f(:,2,1)),sum(sum(f(:,2,:))));
-    iAway = iAway(2) - pAway;
+   
+end
+
+
+%% Visualize results 2: separate by latency
+
+if runPlotting2
     
-    [pSide,iSide] = binofit(sum(f(:,3,1)),sum(sum(f(:,3,:))));
-    iSide = iSide(2) - pSide;
+    % Load L, latency data
+    load([mPath filesep 'latency_data.mat'])
     
-    [pBeat,iBeat] = binofit(sum(f(1,:,1)),sum(sum(f(1,:,:))));
-    iBeat = iBeat(2) - pBeat;
+    % Load fE
+    load([mPath filesep 'probability_data_early.mat'])
+    load([mPath filesep 'ANOVA_data.mat'])
     
-    [pGlide,iGlide] = binofit(sum(f(2,:,1)),sum(sum(f(2,:,:))));
-    iGlide = iGlide(2) - pGlide;
+
+    plotProbablityDataPool(fE);
+    plotLatencyDataPool(L);
     
-    [pStill,iStill] = binofit(sum(f(3,:,1)),sum(sum(f(3,:,:))));
-    iStill = iStill(2) - pStill;
     
+    return
+    % Plot angle vs. latency 
     figure;
+    plot(L.pooled.angle,1000.*L.pooled.latency,'o')
+    xlabel('angle (deg)')
+    ylabel('latency (ms)')
     
-    % Plot probability vs. activity level
-    subplot(2,2,1)
-        % Plot
-        errorbar([1 2 3],[pBeat; pGlide; pStill],[iBeat; iGlide; iStill],'+k') 
-        hold on
-        bar([1 2 3],[pBeat; pGlide; pStill],'w')
     
-        % Labels & axes
-        xlabel('beat                         glide                         still')
-        set(gca,'XTickLabel',' ')
-        set(gca,'YTick',yTicksP)
-        set(gca,'YLim',[yTicksP(1) yTicksP(end)]);
-        ylabel('Probability')
-        hold off
-        
-        % Numbers
-        text(1,pBeat-txtOffProb,[num2str(sum(f(1,:,1))) '/' ...
-                                    num2str(sum(sum(f(1,:,:))))]);
-        text(2,pGlide-txtOffProb,[num2str(sum(f(2,:,1))) '/' ...
-                                    num2str(sum(sum(f(2,:,:))))]);
-        text(3,pStill-txtOffProb,[num2str(sum(f(3,:,1))) '/' ...
-                                    num2str(sum(sum(f(3,:,:))))]);
-             
-    % Plot probability vs. direction
-    subplot(2,2,2)
-        % Plot
-        errorbar([1 2 3],[pToward; pSide; pAway],[iToward; iSide; iAway],'+k')
-        hold on
-        bar([1 2 3],[pToward; pSide; pAway],'w')
-        
-        % Labels & axes
-        xlabel('toward                         side                         away')
-        set(gca,'YTick',yTicksP)
-        set(gca,'XTickLabel',' ')
-        set(gca,'YLim',[yTicksP(1) yTicksP(end)]);
-        hold off
-        
-         % Numbers
-        text(1,pToward-txtOffProb,[num2str(sum(f(:,1,1))) '/' ...
-                                    num2str(sum(sum(f(:,1,:))))]);
-        text(2,pSide-txtOffProb,[num2str(sum(f(:,2,1))) '/' ...
-                                    num2str(sum(sum(f(:,2,:))))]);
-        text(3,pAway-txtOffProb,[num2str(sum(f(:,3,1))) '/' ...
-                                    num2str(sum(sum(f(:,3,:))))]);
-        
-        
-    % Plot latency vs. activity level
-    subplot(2,2,3)
-        % Plot
-         errorbar([1 2 3]',[mean(L.a_beat); mean(L.a_glide); mean(L.a_still)],...
-            [std(L.a_beat); std(L.a_glide); std(L.a_still)],'+k')
-        hold on
-        bar([mean(L.a_beat); mean(L.a_glide); mean(L.a_still)],'w')
-        
-        % Sample size
-        text(1,mean(L.a_beat)+0*std(L.a_beat)-txtOffLatency,num2str(length(L.a_beat)));
-        text(2,mean(L.a_glide)+0*std(L.a_glide)-txtOffLatency,num2str(length(L.a_glide)));
-        text(3,mean(L.a_still)+0*std(L.a_still)-txtOffLatency,num2str(length(L.a_still)));
-        
-        % Labels & axes
-        xlabel('beat                         glide                         still')
-        set(gca,'XTickLabel',' ')
-        %set(gca,'YTick',yTicksL)
-        %set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
-        ylabel('Latency (s)')
-        
-        hold off
-        
-
-    % Plot latency vs. direction
-    subplot(2,2,4)
-        % Plot
-        errorbar([1 2 3]',[mean(L.d_toward); mean(L.d_side); mean(L.d_away)],...
-            [std(L.d_toward); std(L.d_side); std(L.d_away)],'+k')
-        hold on
-        bar([mean(L.d_toward); mean(L.d_side); mean(L.d_away)],'w')
-
-        % Sample sizes
-        text(1,mean(L.d_toward)+0*std(L.d_toward)-txtOffLatency,num2str(length(L.d_toward)));
-        text(2,mean(L.d_side)+0*std(L.d_side)-txtOffLatency,num2str(length(L.d_side)));
-        text(3,mean(L.d_away)+0*std(L.d_away)-txtOffLatency,num2str(length(L.d_away)));
-        
-        % Labels & axes
-        hold off
-        set(gca,'XTickLabel',' ')
-        %set(gca,'YTick',yTicksL)
-        %set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
-        xlabel('toward                         side                         away')
-        
     
 end
+
+
 
 %% Run stats
 
 if runStats
     load([mPath filesep 'ANOVA_data.mat'])
     load([mPath filesep 'probability_data.mat'])
-%     % ANOVA: Test the effects on latency
-%     sName = 'ltncy';
-%     varnames= {['swTime_' sName] ['active_' sName] ['dir_' sName]};
-%     
-%     [p,table,stats] = anovan(s.latency,...
-%                              {s.switchTime s.activity s.direction},'model','interaction',...
-%                              'varnames',varnames);
+    % ANOVA: Test the effects on latency
+    sName = 'ltncy';
+    varnames= {['swTime_' sName] ['active_' sName] ['dir_' sName]};
+    
+    [p,table,stats] = anovan(s.latency,...
+                             {s.switchTime s.activity s.direction},'model','interaction',...
+                             'varnames',varnames);
                          
     % Chi-square: test effects of direction and activity on response
     var1 = 'activity';
@@ -436,3 +358,306 @@ errorbar(prob_d1,phat_1',pci_1(:,1)-phat_1',pci_1(:,2)-phat_1')
 errorbar(prob_d2,phat_2',pci_2(:,1)-phat_2',pci_2(:,2)-phat_2')    
 
 
+
+
+function f = scoreReponse(f,fast_start,c,direction)
+% f is a contingency table, with the columns coding for direction, 
+% rows coding for activity, and the depth coding for response/non-response
+
+if strcmp(c.swimming,'beats')
+    if strcmp(direction,'toward')
+        f(1,1,fast_start) = f(1,1,fast_start) + 1;
+    elseif strcmp(direction, 'side  ')
+        f(1,2,fast_start) = f(1,2,fast_start) + 1;
+    elseif strcmp(direction, 'away  ')
+        f(1,3,fast_start) = f(1,3,fast_start) + 1;
+    end
+elseif strcmp(c.swimming,'glide')
+    if strcmp(direction,'toward')
+        f(2,1,fast_start) = f(2,1,fast_start) + 1;
+    elseif strcmp(direction, 'side  ')
+        f(2,2,fast_start) = f(2,2,fast_start) + 1;
+    elseif strcmp(direction, 'away  ')
+        f(2,3,fast_start) = f(2,3,fast_start) + 1;
+    end
+elseif strcmp(c.swimming,'still')
+    if strcmp(direction,'toward')
+        f(3,1,fast_start) = f(3,1,fast_start) + 1;
+    elseif strcmp(direction, 'side  ')
+        f(3,2,fast_start) = f(3,2,fast_start) + 1;
+    elseif strcmp(direction, 'away  ')
+        f(3,3,fast_start) = f(3,3,fast_start) + 1;
+    end
+end
+
+
+function plotProbablityData(f)
+
+% Parameters for plotting
+%yTicksL = (floor(min(1000.*s.latency)):10:ceil(max(1000.*s.latency)))./1000;
+yTicksP = 0:.5:1;
+txtOffLatency = .004;
+txtOffProb = 0.05;
+
+% Calculate probability stats
+[pToward,iToward] = binofit(sum(f(3,1,1)),sum(sum(f(3,1,:))));
+iToward = iToward(2) - pToward;
+
+[pSide,iSide] = binofit(sum(f(3,2,1)),sum(sum(f(3,2,:))));
+iSide = iSide(2) - pSide;
+
+[pAway,iAway] = binofit(sum(f(3,3,1)),sum(sum(f(3,3,:))));
+iAway = iAway(2) - pAway;
+
+[pBeat,iBeat] = binofit(sum(f(1,:,1)),sum(sum(f(1,:,:))));
+iBeat = iBeat(2) - pBeat;
+
+[pGlide,iGlide] = binofit(sum(f(2,:,1)),sum(sum(f(2,:,:))));
+iGlide = iGlide(2) - pGlide;
+
+[pStill,iStill] = binofit(sum(f(3,:,1)),sum(sum(f(3,:,:))));
+iStill = iStill(2) - pStill;
+
+%     % Pool Beats & Glides
+%     [pBeat,iBeat] = binofit(sum([sum(f(1,:,1)); sum(f(2,:,1))]),...
+%                             sum([sum(sum(f(1,:,:)))...
+%                                  sum(sum(f(2,:,:)))]));
+%   iBeat = iBeat(2) - pBeat;
+
+figure;
+
+% Plot probability vs. activity level
+subplot(1,2,1)
+% Plot
+errorbar([1 2 3],[pBeat; pGlide; pStill],[iBeat; iGlide; iStill],'+k')
+hold on
+bar([1 2 3],[pBeat; pGlide; pStill],'w')
+
+% Labels & axes
+xlabel('beat                         glide                         still')
+set(gca,'XTickLabel',' ')
+set(gca,'YTick',yTicksP)
+set(gca,'YLim',[yTicksP(1) yTicksP(end)]);
+ylabel('Probability')
+hold off
+
+% Numbers
+text(1,pBeat-txtOffProb,[num2str(sum(f(1,:,1))) '/' ...
+    num2str(sum(sum(f(1,:,:))))]);
+text(2,pGlide-txtOffProb,[num2str(sum(f(2,:,1))) '/' ...
+    num2str(sum(sum(f(2,:,:))))]);
+text(3,pStill-txtOffProb,[num2str(sum(f(3,:,1))) '/' ...
+    num2str(sum(sum(f(3,:,:))))]);
+
+axis square
+
+% Plot probability vs. direction
+subplot(1,2,2)
+% Plot
+errorbar([1 2 3],[pToward; pSide; pAway],[iToward; iSide; iAway],'+k')
+hold on
+bar([1 2 3],[pToward; pSide; pAway],'w')
+
+% Labels & axes
+xlabel('toward                         side                         away')
+set(gca,'YTick',yTicksP)
+set(gca,'XTickLabel',' ')
+set(gca,'YLim',[yTicksP(1) yTicksP(end)]);
+hold off
+
+% Numbers
+text(1,pToward-txtOffProb,[num2str(sum(f(3,1,1))) '/' ...
+    num2str(sum(sum(f(3,1,:))))]);
+text(2,pSide-txtOffProb,[num2str(sum(f(3,2,1))) '/' ...
+    num2str(sum(sum(f(3,2,:))))]);
+text(3,pAway-txtOffProb,[num2str(sum(f(3,3,1))) '/' ...
+    num2str(sum(sum(f(3,3,:))))]);
+
+axis square
+
+
+function plotProbablityDataPool(f)
+% This pools the responses from beating and gliding fish
+
+% Parameters for plotting
+%yTicksL = (floor(min(1000.*s.latency)):10:ceil(max(1000.*s.latency)))./1000;
+yTicksP       = 0:.5:1;
+txtOffLatency = .004;
+txtOffProb    = 0.05;
+
+% Calculate probability stats
+[pToward,iToward] = binofit(sum(f(3,1,1)),sum(sum(f(3,1,:))));
+iToward = iToward(2) - pToward;
+
+[pSide,iSide] = binofit(sum(f(3,2,1)),sum(sum(f(3,2,:))));
+iSide = iSide(2) - pSide;
+
+[pAway,iAway] = binofit(sum(f(3,3,1)),sum(sum(f(3,3,:))));
+iAway = iAway(2) - pAway;
+
+[pStill,iStill] = binofit(sum(f(3,:,1)),sum(sum(f(3,:,:))));
+iStill = iStill(2) - pStill;
+
+% Pool Beats & Glides
+[pBeat,iBeat] = binofit(sum([sum(f(1,:,1)); sum(f(2,:,1))]),...
+                        sum([sum(sum(f(1,:,:))) sum(sum(f(2,:,:)))]));
+iBeat = iBeat(2) - pBeat;
+
+figure;
+
+% Plot probability vs. activity level
+subplot(1,2,1)
+% Plot
+errorbar([1 2],[pBeat; pStill],[iBeat; iStill],'+k')
+hold on
+bar([1 2],[pBeat; pStill],'w')
+
+% Labels & axes
+xlabel('Swimming                                           Still')
+set(gca,'XTickLabel',' ')
+set(gca,'YTick',yTicksP)
+set(gca,'YLim',[yTicksP(1) yTicksP(end)]);
+ylabel('Probability')
+hold off
+
+% Numbers
+text(1,pBeat-txtOffProb,[num2str(sum(f(1,:,1))) '/' ...
+    num2str(sum(sum(f(1,:,:))))]);
+text(2,pStill-txtOffProb,[num2str(sum(f(3,:,1))) '/' ...
+    num2str(sum(sum(f(3,:,:))))]);
+
+axis square
+
+% Plot probability vs. direction
+subplot(1,2,2)
+% Plot
+errorbar([1 2 3],[pToward; pSide; pAway],[iToward; iSide; iAway],'+k')
+hold on
+bar([1 2 3],[pToward; pSide; pAway],'w')
+
+% Labels & axes
+xlabel('toward                         side                         away')
+set(gca,'YTick',yTicksP)
+set(gca,'XTickLabel',' ')
+set(gca,'YLim',[yTicksP(1) yTicksP(end)]);
+hold off
+
+% Numbers
+text(1,pToward-txtOffProb,[num2str(sum(f(3,1,1))) '/' ...
+    num2str(sum(sum(f(3,1,:))))]);
+text(2,pSide-txtOffProb,[num2str(sum(f(3,2,1))) '/' ...
+    num2str(sum(sum(f(3,2,:))))]);
+text(3,pAway-txtOffProb,[num2str(sum(f(3,3,1))) '/' ...
+    num2str(sum(sum(f(3,3,:))))]);
+
+axis square
+
+
+function plotLatencyDataPool(L)
+
+% Parameters for plotting
+%yTicksL = (floor(min(1000.*s.latency)):10:ceil(max(1000.*s.latency)))./1000;
+yTicksP = 0:.5:1;
+txtOffLatency = .004;
+txtOffProb = 0.05;
+
+figure
+% Plot latency vs. activity level
+subplot(1,2,1)
+% Plot
+errorbar([1 2]',[mean([L.a_beat; L.a_glide]); mean(L.a_still)],...
+    [std([L.a_beat; L.a_glide]); std(L.a_still)],'+k')
+hold on
+bar([mean([L.a_beat; L.a_glide]); mean(L.a_still)],'w')
+
+% Sample size
+text(1,mean([L.a_beat; L.a_glide]) - ...
+     txtOffLatency,num2str(length(L.a_beat)+length(L.a_glide)));
+text(2,mean(L.a_still)+0*std(L.a_still)-txtOffLatency,num2str(length(L.a_still)));
+
+% Labels & axes
+xlabel('Swimming                                            Still')
+set(gca,'XTickLabel',' ')
+%set(gca,'YTick',yTicksL)
+%set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
+ylabel('Latency (s)')
+
+hold off
+axis square
+
+
+% Plot latency vs. direction
+subplot(1,2,2)
+% Plot
+errorbar([1 2 3]',[mean(L.d_toward); mean(L.d_side); mean(L.d_away)],...
+    [std(L.d_toward); std(L.d_side); std(L.d_away)],'+k')
+hold on
+bar([mean(L.d_toward); mean(L.d_side); mean(L.d_away)],'w')
+
+% Sample sizes
+text(1,mean(L.d_toward)+0*std(L.d_toward)-txtOffLatency,num2str(length(L.d_toward)));
+text(2,mean(L.d_side)+0*std(L.d_side)-txtOffLatency,num2str(length(L.d_side)));
+text(3,mean(L.d_away)+0*std(L.d_away)-txtOffLatency,num2str(length(L.d_away)));
+
+% Labels & axes
+hold off
+set(gca,'XTickLabel',' ')
+%set(gca,'YTick',yTicksL)
+%set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
+xlabel('toward                         side                         away')
+axis square
+
+function plotLatencyData(L)
+
+% Parameters for plotting
+%yTicksL = (floor(min(1000.*s.latency)):10:ceil(max(1000.*s.latency)))./1000;
+yTicksP = 0:.5:1;
+txtOffLatency = .004;
+txtOffProb = 0.05;
+
+figure
+% Plot latency vs. activity level
+subplot(1,2,1)
+% Plot
+errorbar([1 2 3]',[mean(L.a_beat); mean(L.a_glide); mean(L.a_still)],...
+    [std(L.a_beat); std(L.a_glide); std(L.a_still)],'+k')
+hold on
+bar([mean(L.a_beat); mean(L.a_glide); mean(L.a_still)],'w')
+
+% Sample size
+text(1,mean(L.a_beat)+0*std(L.a_beat)-txtOffLatency,num2str(length(L.a_beat)));
+text(2,mean(L.a_glide)+0*std(L.a_glide)-txtOffLatency,num2str(length(L.a_glide)));
+text(3,mean(L.a_still)+0*std(L.a_still)-txtOffLatency,num2str(length(L.a_still)));
+
+% Labels & axes
+xlabel('beat                         glide                         still')
+set(gca,'XTickLabel',' ')
+%set(gca,'YTick',yTicksL)
+%set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
+ylabel('Latency (s)')
+
+hold off
+axis square
+
+
+% Plot latency vs. direction
+subplot(1,2,2)
+% Plot
+errorbar([1 2 3]',[mean(L.d_toward); mean(L.d_side); mean(L.d_away)],...
+    [std(L.d_toward); std(L.d_side); std(L.d_away)],'+k')
+hold on
+bar([mean(L.d_toward); mean(L.d_side); mean(L.d_away)],'w')
+
+% Sample sizes
+text(1,mean(L.d_toward)+0*std(L.d_toward)-txtOffLatency,num2str(length(L.d_toward)));
+text(2,mean(L.d_side)+0*std(L.d_side)-txtOffLatency,num2str(length(L.d_side)));
+text(3,mean(L.d_away)+0*std(L.d_away)-txtOffLatency,num2str(length(L.d_away)));
+
+% Labels & axes
+hold off
+set(gca,'XTickLabel',' ')
+%set(gca,'YTick',yTicksL)
+%set(gca,'YLim',[yTicksL(1) yTicksL(end)]);
+xlabel('toward                         side                         away')
+axis square
+    
