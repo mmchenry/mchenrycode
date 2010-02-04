@@ -5,7 +5,7 @@ function poolData(mPath)
 
 %% Options for what to run
 
-runCollect   = 0;
+runCollect   = 1;
 runPlotting1 = 0;
 runPlotting2 = 1;
 runStats     = 0;
@@ -72,7 +72,7 @@ end
 if runCollect
       
     % Latency threshold (distinguishes early and late responses)
-    latThresh = 40e-3;
+    latThresh = 50e-3;
     
     % Initiate k
     k = 1;
