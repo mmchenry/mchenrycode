@@ -209,6 +209,7 @@ end
 %% Acquisition mode
 
 baseModeColor = [.8 .4 .4];
+frameSkip = 5;
 
 % Give instructions
 disp(' '); disp(' ');
@@ -221,6 +222,9 @@ disp('b - select base mode');disp(' ')
 disp('t - select tip mode');disp(' ')
 disp('j - jump to frame number');disp(' ')
 disp('c - toggle color mode'); disp(' ')
+disp(['+ - skip ' num2str(frameSkip) ' frames forward']); disp(' ')
+disp(['- - skip ' num2str(frameSkip) ' frames backward']); disp(' ')
+disp('s - change interval for skipping forward and backward');disp(' ')
 disp('Press return when done collecting.')
 disp('Press esc to exit');
 disp(' '); disp(' ');
@@ -388,7 +392,17 @@ while 1
         % If 'j'
         elseif but==106
             answer = inputdlg('Desired frame number',' ',1,{''});
-            cFrame = min([seq.numFrames str2num(answer{1})]);
+            if ~isempty(answer) && ~isempty(answer{1})
+                cFrame = min([seq.numFrames str2num(answer{1})]);
+            end
+            break
+            
+         % If 's'
+        elseif but==115
+            answer = inputdlg('Desired interval',' ',1,{''});
+            if ~isempty(answer) && ~isempty(answer{1})
+                frameSkip = str2num(answer{1});
+            end
             break
             
         % If spacebar or right arrow    
@@ -399,6 +413,16 @@ while 1
         % If left arrow
         elseif but== 28
             cFrame = max([cFrame-1 1]);
+            break
+            
+        % If -
+        elseif but==45
+            cFrame = max([cFrame-frameSkip 1]);
+            break
+            
+        % If +   
+        elseif but==43 || but==61         
+            cFrame = min([cFrame+frameSkip seq.numFrames]);
             break
             
         end
