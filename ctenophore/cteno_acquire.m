@@ -220,6 +220,7 @@ disp('z - zoom mode (return to exit)');disp(' ');
 disp('b - select base mode');disp(' ')
 disp('t - select tip mode');disp(' ')
 disp('j - jump to frame number');disp(' ')
+disp('c - toggle color mode'); disp(' ')
 disp('Press return when done collecting.')
 disp('Press esc to exit');
 disp(' '); disp(' ');
@@ -232,6 +233,7 @@ set(gcf,'DoubleBuffer','on');
 
 numLimit = 10^10;
 tipMode = 1;
+colorMode = 0;
 
 im = imread([imPath filesep seq.fileNames{1}]); 
 hIm = imshow(im);
@@ -244,9 +246,15 @@ ylim_c = ylim;
 % Loop for interactive mode
 while 1
     
-    im = imread([imPath filesep seq.fileNames{cFrame}]);  
-    
     warning off
+    im = imread([imPath filesep seq.fileNames{cFrame}]);
+    
+    %im = histeq(rgb2gray(im));
+    if ~colorMode
+        im = adapthisteq(rgb2gray(im),'clipLimit',0.02,...
+            'Distribution','rayleigh');
+    end
+    
     hIm = imshow(im);
     warning on
     
@@ -370,6 +378,17 @@ while 1
         % If 'b'
         elseif but==98
             tipMode = 0;
+            break
+            
+        % If 'c'
+        elseif but==99
+            colorMode = abs(colorMode - 1);
+            break
+            
+        % If 'j'
+        elseif but==106
+            answer = inputdlg('Desired frame number',' ',1,{''});
+            cFrame = min([seq.numFrames str2num(answer{1})]);
             break
             
         % If spacebar or right arrow    
