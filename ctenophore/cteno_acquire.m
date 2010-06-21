@@ -145,7 +145,12 @@ switch but
             return
         end
         
-        iPlate = str2num(plNums{s});
+        for i=1:length(pl)
+            if pl(i).plate_num==str2num(plNums{s})
+                iPlate = i;
+                break
+            end
+        end
         
         cFrame = find(~isnan(pl(iPlate).tipX),1,'last');
         if isempty(cFrame)
@@ -170,11 +175,16 @@ switch but
             return
         end
         
-        iPlate = str2num(plNums{s});
+        for i=1:length(pl)
+            if pl(i).plate_num==str2num(plNums{s})
+                iPlate = i;
+                break
+            end
+        end
         
         % Confirm delete
         but2 = questdlg(['Are you sure you want to delete plate ' ...
-                        num2str(iPlate) '?'],'Warning','Yes - delete',...
+                        plNums{s} '?'],'Warning','Yes - delete',...
                         'No - Cancel','No - Cancel');
                     
         % Cancel or execute
@@ -234,10 +244,10 @@ hF = figure;
 set(gcf,'DoubleBuffer','on');
 
 % Set initial parameter values
-
 numLimit = 10^10;
 tipMode = 1;
 colorMode = 0;
+displayAll = 0;
 
 im = imread([imPath filesep seq.fileNames{1}]); 
 hIm = imshow(im);
@@ -282,7 +292,7 @@ while 1
         
         % Plot existing data
         hold on
-        h = plotData(pl,cFrame,iPlate);
+        h = plotData(pl,cFrame,iPlate,displayAll);
         hold off
         
         [x,y,but] = ginput(1);
@@ -405,6 +415,10 @@ while 1
             end
             break
             
+        % If 'd'
+        elseif but==100
+            displayAll = abs(displayAll-1);            
+        
         % If spacebar or right arrow    
         elseif (but==32) || (but==29)           
             cFrame = min([cFrame+1 seq.numFrames]);
@@ -441,7 +455,7 @@ end
 close;
 
 
-function h = plotData(pl,cFrame,iPlate)
+function h = plotData(pl,cFrame,iPlate,displayAll)
 
 % Offset (in ix) for text
 offset = 7;
@@ -449,6 +463,7 @@ offset = 7;
 % number of priot point to display
 numPts = 5;
 
+iPlate_c = iPlate;
 % % Plot earlier tips
 % tX = pl(iPlate).tipX;
 % tY = pl(iPlate).tipY;
@@ -465,28 +480,51 @@ numPts = 5;
 %alpha(h,0.5);
 hold on
 
-% Plot current plate
-bX = pl(iPlate).baseX(cFrame);
-bY = pl(iPlate).baseY(cFrame);
-tX = pl(iPlate).tipX(cFrame);
-tY = pl(iPlate).tipY(cFrame);
-
-num = num2str(pl(iPlate).plate_num);
-
-h = plot([bX tX],[bY tY],'w-',bX,bY,'og',tX,tY,'r+');
-%alpha(h1,0.5)
-%plot();
-
-if ~isnan(bX)
-    hT = text(bX-offset,bY+offset,num);
-    set(hT,'Color','g')
-    if pl(iPlate).baseMod(cFrame)
-        set(hT,'FontWeight','bold')
-        set(hT,'FontAngle','oblique')
-        xlabel('Base key frame');
-    else
-        xlabel(' ');
-    end
+% Include all plates, if displayAll
+if displayAll
+    iPlate = 1:length(pl);
 end
 
+h = [];
+
+for i = 1:length(iPlate)
+    % Plot current plate
+    bX = pl(iPlate(i)).baseX(cFrame);
+    bY = pl(iPlate(i)).baseY(cFrame);
+    tX = pl(iPlate(i)).tipX(cFrame);
+    tY = pl(iPlate(i)).tipY(cFrame);
+    
+    num = num2str(pl(iPlate(i)).plate_num);
+    
+    if iPlate_c == iPlate(i)
+        tmp = plot([bX tX],[bY tY],'r-',bX,bY,'og',tX,tY,'r+');
+    else
+        tmp = plot([bX tX],[bY tY],'w-',bX,bY,'ow',tX,tY,'w+');
+    end
+    
+    h = [h;tmp];
+    %alpha(h1,0.5)
+    %plot();
+    
+    if ~isnan(bX)
+        tmp = text(bX-offset,bY+offset,num);
+        h = [h;tmp];
+        
+        if iPlate_c == iPlate(i)
+            set(h(end),'Color','g')
+        else
+            set(h(end),'Color','w')
+        end
+        
+        if pl(iPlate(i)).baseMod(cFrame)
+            set(h(end),'FontWeight','bold')
+            set(h(end),'FontAngle','oblique')
+            xlabel('Base key frame');
+        else
+            xlabel(' ');
+        end
+    end  
+    
+    clear bX bY tX tY tmp
+end
 
