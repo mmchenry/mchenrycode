@@ -102,7 +102,9 @@ for i = startFrame:endFrame
     j = j + 1;
 end
 
-close(h)
+if ~runInfo.show
+    close(h)
+end
 
 if runInfo.vidOut
     aviobj = close(aviobj);
