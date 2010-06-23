@@ -1,0 +1,236 @@
+function [d,xyData] = spotTracker(varargin)
+% Finds single point on the body for each frame of a video file
+
+
+%Collect input parameter values
+mov                     = varargin{1};
+tVal                    = varargin{2};
+rEst                    = [varargin{3} varargin{4}];
+runInfo                 = varargin{5};
+roiSize                 = varargin{6};
+invert                  = varargin{7};
+roiType                 = varargin{8};
+subtract                = varargin{9};
+startFrame              = varargin{10};
+endFrame                = varargin{11};
+
+% Set up figure window and avi object
+if runInfo.show
+    figure;
+    set(gcf,'Color','k'); 
+    set(gcf,'DoubleBuffer','on');
+    suffix = '_out';
+    if runInfo.vidOut
+        if mov.isTiff
+            aviobj = avifile(...
+                [mov.dirPath filesep mov.fileNames(1).name suffix],...
+                'Compression','None','Quality',100,'fps',15);
+        else
+            disp('Note: you need to manually delete ')
+            disp([mov.dirPath filesep mov.fileName(1:end-4) suffix]);
+            disp(['if you want to overwrite an earlier copy'])
+            aviobj = avifile(...
+                [mov.dirPath filesep mov.fileName(1:end-4) suffix],...
+                'Compression','None','Quality',100,'fps',15);
+        end
+    end
+end
+
+%Create binary image from initial guess and region of interest (roi)
+im                  = grabFrame(mov,startFrame,invert,subtract);
+[xNode,yNode]       = roiCoords(roiType,roiSize,rEst);
+imROI               = roipoly(im.cdata,xNode,yNode);
+imBW                = ~im2bw(im.cdata,im.colormap,tVal);
+imBW                = imBW & imROI;
+LL                  = bwlabel(imBW);
+if ~(max(imBW(:))==1) 
+    error('Increase threshold and roi so that one blob is in the roi');
+elseif max(LL(:))>1
+    error('Decrease threshold so that there are fewer blobs in roi')   
+end
+
+%Analyze area of blob within the roi
+[coords,areas]      = giveSpotData(imBW);     
+rAreaStart          = areas;
+rAreaOld            = areas;
+rEst                = coords;
+
+%-----------------------------------------------------------------------
+%Loop that steps through each video frame
+%-----------------------------------------------------------------------
+j = 1;
+if ~runInfo.show
+    h = waitbar(0,'Analysis: frame 0');
+end
+    
+for i = startFrame:endFrame
+    im                  = grabFrame(mov,i,invert,subtract);
+    [xNode,yNode]       = roiCoords(roiType,roiSize,rEst);
+    imROI               = roipoly(im.cdata,xNode,yNode);
+    imBW                = ~im2bw(im.cdata,im.colormap,tVal);
+    imBW                = imBW & imROI;
+
+    [imBW,tVal]         = giveSpot(im,imROI,rAreaOld,rAreaStart,tVal,runInfo);
+    
+    [rEst,rArea]        = giveTwoCoord(imBW,rEst); %get the likely coordinates for these eyes
+
+    xyData(j,:)         = rEst;
+    d.raw.xy(j,:)       = rEst;
+    
+    rAreaOld            = rArea;
+    frameNum(j,:)       = i;
+    
+  %Display:
+    if runInfo.show
+        %a                   = imDisplay(im,imBW,imROI,xNode,yNode,rEst,i,endFrame);
+        imBW2                = imDisplay(im,tVal);  
+        hold on
+        plot(xNode,yNode,'g-',rEst(1),rEst(2),'r+')
+        tit = title(['Frame ' num2str(i) ' out of ' num2str(endFrame)]); set(tit,'Color','w');
+        hold off
+        disp(' ');
+        disp(['trackEyes:  FrameNum = ' num2str(i) ', FrameStop = ' num2str(endFrame)]);
+        if runInfo.vidOut
+            frmIm       = getframe(gca);
+            aviobj      = addframe(aviobj,frmIm);
+        end
+        pause(.001)
+    else
+        waitbar(i/(endFrame-startFrame),h,...
+            ['Analysis: frame ' num2str(i)]);
+    end
+    j = j + 1;
+end
+
+close(h)
+
+if runInfo.vidOut
+    aviobj = close(aviobj);
+end
+if runInfo.show
+    close
+end
+%save([mov.dirPath filesep 'xyData'],'xyData');
+%csvwrite([mov.dirPath filesep 'xyData.txt'],xyData);
+beep;disp('. . . done')
+
+function [imBW,lEst,rEst,area1,area2] = findEyes(im,imROI,tVal,lEst,rEst,lAreaOld,rAreaOld)
+    imBW                = ~im2bw(im,tVal);
+    imBW                = imBW & imROI;
+    if  max(max(bwlabel(imBW)))==2
+        imBW = imBW;
+    else
+        imBW = giveTwoEyes(im,imROI,lAreaOld,rAreaOld,tVal);
+    end
+    [rEst,lEst,rArea,lArea]...
+                        = giveTwoCoord(imBW,rEst,lEst);
+
+function [imBW,tVal] = giveSpot(im,imROI,rAreaOld,rAreaStart,tVal,runInfo)
+% Adjust tVal to keep area of eyes similar.  tValStep goes down an order of magnitude if 
+% there is it misses the threshold in a step.
+sDe         = 0;
+sIn         = 0;
+tValStep    = 10.^-2;
+span        = 0.25;
+while 1==1
+    imBW                = ~im2bw(im.cdata,im.colormap,tVal);
+    imBW                = imBW & imROI;
+    [coords,areas]      = giveSpotData(imBW);
+    [imBW,area1]        = giveEyeImage(imBW,areas,rAreaOld);
+    if area1 > ((1+span) .* rAreaStart)
+        if sIn, tValStep = tValStep ./ 10; end
+        tVal        = tVal - tValStep;
+        if runInfo.show, disp(['      Decreasing threshold, tValStep =' num2str(tValStep)]);end
+        sDe         = 1; 
+        sIn         = 0;
+    elseif area1 < ((1-span) .* rAreaStart)
+        if sDe, tValStep = tValStep ./ 10; end
+        tVal        = tVal + tValStep;
+        if runInfo.show, disp(['      Increasing threshold, tValStep =' num2str(tValStep)]);end
+        sIn         = 1;
+        sDe         = 0;
+    else
+        break
+    end
+    if log10(tValStep) < -5
+        tValStep    = 10.^-2;
+        span        = span + .05;
+    end
+end
+
+function [imBW,area1]  = giveEyeImage(imBW,areas,rAreaOld);
+imLabel         = bwlabel(imBW);
+mArea           = rAreaOld;
+areas           = [[1:length(areas)]' areas abs(areas-mArea)];
+blobNum1        = min(areas(   find( min(areas(:,3))==areas(:,3) )   ,1));
+area1           = areas( find(areas(:,1)==blobNum1) ,2);
+imBW            = imLabel == blobNum1;
+          
+function [rEst,rArea] = giveTwoCoord(imBW,rEst,lEst)
+imLabel         = bwlabel(imBW);
+%First, grab centroids:
+[coord1,area1]  = returnSpot(imLabel,imBW,1);
+if max(imLabel(:))>1
+    [coord2,area2]  = returnSpot(imLabel,imBW,2);
+    %Choose point most likely to correspond to each eye:
+    P1              = norm([coord1-rEst]) + norm([coord2-lEst]);
+    P2              = norm([coord2-rEst]) + norm([coord1-lEst]);
+    if P1 < P2
+        rEst    = coord1;
+        rArea   = area1;
+    else   
+        rEst    = coord2;
+        rArea   = area2;
+    end 
+else
+    rEst    = coord1;
+    rArea   = area1;
+end
+
+function [coords,areas]  = giveSpotData(imBW)
+%Now, find the 2 most likely eye images, based on area:
+coords = [0 0];
+areas  = 0;
+imLabel     = bwlabel(imBW);
+for i = 1:max(max(imLabel))
+    [coordTemp,areaTemp]    = returnSpot(imLabel,imBW,i);
+    coords(i,:)             = coordTemp;
+    areas(i,:)              = areaTemp;
+end
+
+function [coord,areaS] = returnSpot(imLabel,imBW,lNum)
+imSpot  = imBW & imLabel==lNum;
+temp    = regionprops(bwlabel(imSpot),'Centroid','Area');
+if isempty(temp)
+    error('No spot in the region of interest');
+end
+coord   = temp.Centroid;
+areaS   = temp.Area;
+
+function a = imDisplay_old(im,imBW,imROI,xNode,yNode,rEye,frameNum,numFrames)
+%imshow(im);hold on;
+fillColor           = [.43 .49 1];
+im.cdata(find(imBW&imROI))= 244.*ones(length((find(imBW&imROI))),1);
+cMap                = [[0:1./255:1]' [0:1./255:1]' [0:1./255:1]'];
+cMap(245,:)         = fillColor;
+a                   = imshow(im.cdata,cMap);
+hold on
+plot(xNode,yNode,'g-');
+eyeDisplay(rEye,frameNum,numFrames);
+hold off
+
+function eyeDisplay(rEye,frameNum,numFrames)
+rSym = plot(rEye(1),rEye(2),'r+');
+%set(rSym,'MarkerEdgeColor','k','MarkerFaceColor','k');
+tit = title(['Frame ' num2str(frameNum) ' out of ' num2str(numFrames)]);
+set(tit,'Color','w');
+
+function  y = fileThere(fName,fPath)
+a	= dir(fPath);
+y	= 0;
+for i = 1:length(a)
+	if (length(a(i).name) > 3) && strcmp(a(i).name,fName)
+		y = 1;
+		break
+	end
+end
