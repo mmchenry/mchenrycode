@@ -1,0 +1,47 @@
+function img = grabFrame(varargin)
+%Return image data for a single video frame.  Accepts a TIFF stack or AVI.
+%example: img = grabFrame(mov,fNum,invert)
+%mov is the movie structure
+%fNum is the frame number
+%invert is an option to flip the colormap
+
+if nargin < 2
+    error('You need to at least input a filename and frame number');
+else
+    mov     = varargin{1};
+    fNum    = varargin{2};
+    if nargin < 3
+        invert = 0;
+    else
+        invert  = varargin{3};
+        if nargin < 4
+            subtract = 0;
+        else
+            subtract = varargin{4};
+        end
+    end
+end
+
+if mov.isTiff
+    [img.cdata,img.colormap] = imread([mov.dirPath filesep mov.fileNames(fNum).name '.' mov.ext]);
+else %assume AVI, if not TIFF
+    img = (aviread([mov.dirPath filesep mov.fileName],fNum));
+end
+
+if invert
+    img.colormap = img.colormap(end:-1:1,:);
+end
+
+if subtract
+    im                  = double(img.cdata);
+    imSub               = double(imread([mov.dirPath filesep...
+                                    'meanImage.tif']));
+    if size(img.cdata,3)>1
+        img.cdata(:,:,1)    = uint8(128 - imSub + im(:,:,1));
+        img.cdata(:,:,2)    = uint8(128 - imSub  + im(:,:,2));
+        img.cdata(:,:,3)    = uint8(128 - imSub  + im(:,:,3));
+    else
+        img.cdata(:,:,1)    = uint8(128 - imSub + im(:,:,1));
+    end
+    %img.colormap        = img.colormap(end:-1:1,:);
+end
