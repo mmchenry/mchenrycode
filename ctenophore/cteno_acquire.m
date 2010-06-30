@@ -133,42 +133,9 @@ switch but
         if isempty(a) || isempty(pl)
             error('No plate data exist')
         end
-          
-        % Make plate list
-        for i = 1:length(pl)
-            plNums{i} = num2str(pl(i).plate_num);
-        end
-  
-        % Prompt for selection of cureent plate number
-        [s,v] = listdlg('PromptString','Select plate number',...
-                        'SelectionMode','single',...
-                        'ListString',plNums);
-        if isempty(s)
-            return
-        end
         
-        for i=1:length(pl)
-            if pl(i).plate_num==str2num(plNums{s})
-                iPlate = i;
-                break
-            end
-        end
-        
-        % Define curent fraem from end of data
-        cFrame = find(~isnan(pl(iPlate).tipX),1,'last');
-        if isempty(cFrame)
-            cFrame = 1;
-        end
-        
-        clear s v
-        
-        % Add angleX and angleY, if not present
-        if ~isfield(pl(iPlate),'angleX') || ...
-                isempty(pl(iPlate).angleX)
-            pl(iPlate).angleX= nan(seq.numFrames,1);
-            pl(iPlate).angleY= nan(seq.numFrames,1);
-        end
-        
+        [cFrame,iPlate,pl] = continue_plate(pl);
+ 
         
     case 'Delete data on a comb plate'
         
@@ -248,6 +215,7 @@ disp( '  b - toggle base/tip mode');
 disp( '  c - toggle color mode'); 
 disp( '  d - toggle displaying all comb plates'); 
 disp( '  a - toggle angle mode');
+disp( '  p - jump to another comb plate');
 disp(' ')
 disp('Press return or esc when done collecting.')
 disp('===============================================')
@@ -573,6 +541,11 @@ while 1
             end
             
             break
+        
+        % If 'p'
+        elseif but==112
+            [cFrame,iPlate,pl] = continue_plate(pl); 
+            break
             
         end
         
@@ -599,20 +572,7 @@ offset = 7;
 numPts = 5;
 
 iPlate_c = iPlate;
-% % Plot earlier tips
-% tX = pl(iPlate).tipX;
-% tY = pl(iPlate).tipY;
-% 
-% tX = tX(1:cFrame);
-% tY = tY(1:cFrame);
-% 
-% tX = tX(~isnan(tX));
-% tY = tY(~isnan(tX));
-% 
-% idx = max([length(tX)-numPts 1]):1:(length(tX)-1);
-% 
-% h = plot(tX(idx),tY(idx),'r+');
-%alpha(h,0.5);
+
 hold on
 
 % Include all plates, if displayAll
@@ -623,6 +583,14 @@ end
 h = [];
 
 for i = 1:length(iPlate)
+    
+    % Add angleX and angleY, if not present
+    if ~isfield(pl(iPlate(i)),'angleX') || ...
+            isempty(pl(iPlate(i)).angleX)
+        pl(iPlate(i)).angleX= nan(length(pl(iPlate(i)).tipX),1);
+        pl(iPlate(i)).angleY= nan(length(pl(iPlate(i)).tipX),1);
+    end
+
     % Plot current plate
     bX = pl(iPlate(i)).baseX(cFrame);
     bY = pl(iPlate(i)).baseY(cFrame);
@@ -671,3 +639,39 @@ for i = 1:length(iPlate)
     clear bX bY tX tY aX aY num
 end
 
+function [cFrame,iPlate,pl] = continue_plate(pl)
+
+% Make plate list
+for i = 1:length(pl)
+    plNums{i} = num2str(pl(i).plate_num);
+end
+
+% Prompt for selection of cureent plate number
+[s,v] = listdlg('PromptString','Select plate number',...
+    'SelectionMode','single',...
+    'ListString',plNums);
+if isempty(s)
+    return
+end
+
+for i=1:length(pl)
+    if pl(i).plate_num==str2num(plNums{s})
+        iPlate = i;
+        break
+    end
+end
+
+% Define curent fraem from end of data
+cFrame = find(~isnan(pl(iPlate).tipX),1,'last');
+if isempty(cFrame)
+    cFrame = 1;
+end
+
+clear s v
+
+% Add angleX and angleY, if not present
+if ~isfield(pl(iPlate),'angleX') || ...
+        isempty(pl(iPlate).angleX)
+    pl(iPlate).angleX= nan(seq.numFrames,1);
+    pl(iPlate).angleY= nan(seq.numFrames,1);
+end
