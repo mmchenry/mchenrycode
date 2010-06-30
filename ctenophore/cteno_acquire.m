@@ -163,7 +163,8 @@ switch but
         clear s v
         
         % Add angleX and angleY, if not present
-        if ~isfield(pl(iPlate),'angleX')
+        if ~isfield(pl(iPlate),'angleX') || ...
+                isempty(pl(iPlate).angleX)
             pl(iPlate).angleX= nan(seq.numFrames,1);
             pl(iPlate).angleY= nan(seq.numFrames,1);
         end
