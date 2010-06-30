@@ -122,6 +122,8 @@ switch but
         pl(iPlate).baseMod = zeros(seq.numFrames,1);
         pl(iPlate).tipX  = nan(seq.numFrames,1);
         pl(iPlate).tipY  = nan(seq.numFrames,1);
+        pl(iPlate).angleX= nan(seq.numFrames,1);
+        pl(iPlate).angleY= nan(seq.numFrames,1);
 
         clear answer
         
@@ -137,7 +139,7 @@ switch but
             plNums{i} = num2str(pl(i).plate_num);
         end
   
-        % Prompt for selection
+        % Prompt for selection of cureent plate number
         [s,v] = listdlg('PromptString','Select plate number',...
                         'SelectionMode','single',...
                         'ListString',plNums);
@@ -152,12 +154,19 @@ switch but
             end
         end
         
+        % Define curent fraem from end of data
         cFrame = find(~isnan(pl(iPlate).tipX),1,'last');
         if isempty(cFrame)
             cFrame = 1;
         end
         
         clear s v
+        
+        % Add angleX and angleY, if not present
+        if ~isfield(pl(iPlate),'angleX')
+            pl(iPlate).angleX= nan(seq.numFrames,1);
+            pl(iPlate).angleY= nan(seq.numFrames,1);
+        end
         
         
     case 'Delete data on a comb plate'
@@ -214,30 +223,34 @@ end
 
 
 
-
-
 %% Acquisition mode
 
-baseModeColor = [.8 .4 .4];
+baseModeColor  = [.8 .4 .4];
+angleModeColor = [.7 .7 .9];
 frameSkip = 5;
 
 % Give instructions
-disp(' '); disp(' ');
-disp('Left mouse   -  picks point.');disp(' ');
-disp('Right mouse  - removes last point.');disp(' ');
-disp('space bar - advance frame');disp(' ');
-disp('left arrow - back one frame'); disp(' ');
-disp('z - zoom mode (return to exit)');disp(' ');
-disp('b - select base mode');disp(' ')
-disp('t - select tip mode');disp(' ')
-disp('j - jump to frame number');disp(' ')
-disp('c - toggle color mode'); disp(' ')
-disp(['+ - skip ' num2str(frameSkip) ' frames forward']); disp(' ')
-disp(['- - skip ' num2str(frameSkip) ' frames backward']); disp(' ')
-disp('s - change interval for skipping forward and backward');disp(' ')
-disp('Press return when done collecting.')
-disp('Press esc to exit');
-disp(' '); disp(' ');
+disp(' '); 
+disp('=================== CONTROL ====================')
+disp('  Left mouse   - pick point'); 
+disp('  Right mouse  - remove point'); 
+disp('  space bar    - advance 1 frame'); 
+disp('  left arrow   - back 1 frame'); 
+disp(' ')
+disp(['  + - skip ' num2str(frameSkip) ' frames forward']); 
+disp(['  - - skip ' num2str(frameSkip) ' frames backward']); 
+disp( '  s - change interval for skipping forward and backward');
+disp( '  j - jump to frame number');
+disp(' ')
+disp( '  z - zoom mode (return to exit)'); 
+disp( '  b - toggle base/tip mode');  
+disp( '  c - toggle color mode'); 
+disp( '  d - toggle displaying all comb plates'); 
+disp( '  a - toggle angle mode');
+disp(' ')
+disp('Press return or esc when done collecting.')
+disp('===============================================')
+disp(' ');
 
 % Make figure window
 hF = figure;
@@ -245,12 +258,15 @@ set(gcf,'DoubleBuffer','on');
 
 % Set initial parameter values
 numLimit = 10^10;
-tipMode = 1;
+progMode = 1;
 colorMode = 0;
 displayAll = 0;
 
-im = imread([imPath filesep seq.fileNames{1}]); 
+% Display image to get pixel coordinates
+warning off
+im  = imread([imPath filesep seq.fileNames{1}]); 
 hIm = imshow(im);
+warning on
 
 % Get x and y limits
 xlim_c = xlim;
@@ -276,14 +292,18 @@ while 1
     xlim(xlim_c);
     ylim(ylim_c);
     
-    if tipMode
+    if progMode == 1
         title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
             '  TIP MODE'])
         set(hF,'Color','w')
-    else
+    elseif progMode == 0
         title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
             '  BASE MODE'])
         set(hF,'Color',baseModeColor);
+    elseif progMode == 2
+        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  ANGLE MODE'])
+        set(hF,'Color',angleModeColor);
     end
     
     
@@ -304,10 +324,11 @@ while 1
         % Left click
         elseif but==1 
             
-            if tipMode
+            if progMode == 1
                 pl(iPlate).tipX(cFrame) = x;
                 pl(iPlate).tipY(cFrame) = y;
-            else
+                
+            elseif progMode == 0
                 % Set that the current base value has been modified
                 pl(iPlate).baseMod(cFrame) = 1;
                 
@@ -325,6 +346,22 @@ while 1
                 % Update base coords
                 pl(iPlate).baseX(iFill) = x.*ones(length(iFill),1);
                 pl(iPlate).baseY(iFill) = y.*ones(length(iFill),1);
+            
+            elseif progMode == 2
+                % Locate slices after present that have been modified
+                tmp = find(pl(iPlate).baseMod);
+                idx = tmp((tmp>cFrame));
+                
+                % Define interval over which to define the base coords
+                if isempty(idx)
+                    iFill = min([cFrame seq.numFrames]):seq.numFrames;
+                else
+                    iFill = min([cFrame seq.numFrames]):idx(1);
+                end
+                
+                % Update angle coords
+                pl(iPlate).angleX(iFill) = x.*ones(length(iFill),1);
+                pl(iPlate).angleY(iFill) = y.*ones(length(iFill),1);
                 
             end
             
@@ -335,10 +372,13 @@ while 1
         % Right click    
         elseif but==3 
             
-            if tipMode
+            % Tip mode
+            if progMode==1
                 pl(iPlate).tipX(cFrame) = nan;
                 pl(iPlate).tipY(cFrame) = nan;
-            else
+            
+            % Base mode
+            elseif progMode==0
                 
                 % Locate slices after present that have been modified
                 tmp = find(pl(iPlate).baseMod);
@@ -364,6 +404,28 @@ while 1
                 pl(iPlate).baseX(iFill) = nan(length(iFill),1);
                 pl(iPlate).baseY(iFill) = nan(length(iFill),1);
                 
+                % Update angle coords
+                pl(iPlate).angleX(iFill) = nan(length(iFill),1);
+                pl(iPlate).angleY(iFill) = nan(length(iFill),1);
+            
+            % Angle mode
+            elseif progMode == 2
+                
+                % Locate slices after present that have been modified
+                tmp = find(pl(iPlate).baseMod);
+                idx = tmp((tmp>cFrame));
+                
+                % Define interval over which to define the base coords
+                if isempty(idx)
+                    iFill = min([cFrame seq.numFrames]):seq.numFrames;
+                else
+                    iFill = min([cFrame seq.numFrames]):idx(1);
+                end
+                
+                % Update angle coords
+                pl(iPlate).angleX(iFill) = nan(length(iFill),1);
+                pl(iPlate).angleY(iFill) = nan(length(iFill),1);
+                
             end
             
             % Back one frame
@@ -381,17 +443,15 @@ while 1
             zoom on
             pause;
             xlim_c = xlim;
-            ylim_c = ylim;
-            %TODO: preserve zoom beyond frame advance
-            
-        % If 't'
-        elseif but==116
-            tipMode = 1;
-            break
+            ylim_c = ylim;   
             
         % If 'b'
-        elseif but==98
-            tipMode = 0;
+        elseif (but==98) || (but==116)
+            if progMode == 1
+                progMode = 0;
+            elseif progMode == 0
+                progMode = 1;
+            end
             break
             
         % If 'c'
@@ -401,6 +461,10 @@ while 1
             
         % If 'j'
         elseif but==106
+            if progMode==2
+               beep; disp('You can only look at key frames on angle mode')
+            end
+            
             answer = inputdlg('Desired frame number',' ',1,{''});
             if ~isempty(answer) && ~isempty(answer{1})
                 cFrame = min([seq.numFrames str2num(answer{1})]);
@@ -420,23 +484,93 @@ while 1
             displayAll = abs(displayAll-1);            
         
         % If spacebar or right arrow    
-        elseif (but==32) || (but==29)           
-            cFrame = min([cFrame+1 seq.numFrames]);
-            break
+        elseif (but==32) || (but==29) 
+            % Advance frame, if in base or tip mode
+            if (progMode==1) || (progMode==0)
+                cFrame = min([cFrame+1 seq.numFrames]);
+                break
+                
+            % If angle mode, advace to next keyframe    
+            elseif progMode==2
+                % Locate slices after present that have been modified
+                tmp = find(pl(iPlate).baseMod);
+                idx = tmp((tmp>cFrame));
+                if isempty(idx)
+                    beep
+                    disp('That is all the keyframes for this plate')
+                else
+                    cFrame = idx(1);
+                end
+                
+                clear tmp idx
+                
+                break
+            end
             
         % If left arrow
         elseif but== 28
+            if (progMode==1) || (progMode==0)
             cFrame = max([cFrame-1 1]);
             break
             
+            elseif progMode==2
+                
+                % Locate slices before present that have been modified
+                tmp = find(pl(iPlate).baseMod);
+                idx = tmp((tmp<cFrame));
+                if isempty(idx)
+                    beep
+                    disp('No prior keyframes for this plate')
+                else
+                    cFrame = idx(end);
+                end
+                
+                clear tmp idx
+                
+                break
+            end
+            
         % If -
         elseif but==45
-            cFrame = max([cFrame-frameSkip 1]);
-            break
+            if (progMode==1) || (progMode==0)
+                cFrame = max([cFrame-frameSkip 1]);
+                break
+            end
             
         % If +   
-        elseif but==43 || but==61         
-            cFrame = min([cFrame+frameSkip seq.numFrames]);
+        elseif but==43 || but==61     
+            if (progMode==1) || (progMode==0)
+                cFrame = min([cFrame+frameSkip seq.numFrames]);
+                break
+            end
+            
+        % If 'a'  
+        elseif but==97
+            
+            if progMode ~=2
+                answer = questdlg(['Enter in this mode only after ' ...
+                    'collecting all base and tip data'],'Warning',...
+                    'Continue','Cancel','Continue');
+                if strcmp(answer,'Continue')
+                    
+                    % Set progMode
+                    progMode = 2;
+                    
+                    % Jump to first keyframe
+                    tmp = find(pl(iPlate).baseMod,1,'first');
+                    if isempty(tmp)
+                        beep; disp('No keyframes defined')
+                        progMode = 0;
+                    else
+                        cFrame = tmp;
+                    end
+                    
+                    clear tmp
+                end
+            else
+                progMode = 1;
+            end
+            
             break
             
         end
@@ -493,8 +627,14 @@ for i = 1:length(iPlate)
     bY = pl(iPlate(i)).baseY(cFrame);
     tX = pl(iPlate(i)).tipX(cFrame);
     tY = pl(iPlate(i)).tipY(cFrame);
+    aX = pl(iPlate(i)).angleX(cFrame);
+    aY = pl(iPlate(i)).angleY(cFrame);
     
     num = num2str(pl(iPlate(i)).plate_num);
+    
+    tmp = plot([aX bX],[aY bY],'w-');
+    h = [h;tmp];
+    clear tmp
     
     if iPlate_c == iPlate(i)
         tmp = plot([bX tX],[bY tY],'r-',bX,bY,'og',tX,tY,'r+');
@@ -503,12 +643,14 @@ for i = 1:length(iPlate)
     end
     
     h = [h;tmp];
+    clear tmp
     %alpha(h1,0.5)
     %plot();
     
     if ~isnan(bX)
         tmp = text(bX-offset,bY+offset,num);
         h = [h;tmp];
+        clear tmp
         
         if iPlate_c == iPlate(i)
             set(h(end),'Color','g')
@@ -525,6 +667,6 @@ for i = 1:length(iPlate)
         end
     end  
     
-    clear bX bY tX tY tmp
+    clear bX bY tX tY aX aY num
 end
 
