@@ -79,7 +79,24 @@ else
     
     % Otherwise, cerate empty lists
     pl(1).plate_num = [];
-    plNums{1} = ' ';
+    plNums{1}       = ' ';
+    
+end
+
+% Look for body data
+aBody = dir([imPath filesep 'body_data.mat']);
+
+% Load or create structure, if no file
+if ~isempty(aBody)
+    
+    load([imPath filesep 'body_data.mat']);
+
+else
+    
+    body.statX  = nan(seq.numFrames,1);
+    body.statY  = nan(seq.numFrames,1);
+    body.mouthX = nan(seq.numFrames,1);
+    body.mouthY = nan(seq.numFrames,1);
     
 end
 
@@ -195,6 +212,9 @@ end
 
 baseModeColor  = [.8 .4 .4];
 angleModeColor = [.7 .7 .9];
+mouthModeColor = [.7 .7 0];
+statModeColor  = [0 .7 .7];
+
 frameSkip = 5;
 
 % Give instructions
@@ -211,11 +231,13 @@ disp( '  s - change interval for skipping forward and backward');
 disp( '  j - jump to frame number');
 disp(' ')
 disp( '  z - zoom mode (return to exit)'); 
-disp( '  b - toggle base/tip mode');  
+disp( '  b - toggle base mode');  
 disp( '  c - toggle color mode'); 
 disp( '  d - toggle displaying all comb plates'); 
 disp( '  a - toggle angle mode');
 disp( '  p - jump to another comb plate');
+disp( '  m - toggle mouth points mode');
+disp( '  t - toggle statocyst points mode');
 disp(' ')
 disp('Press return or esc when done collecting.')
 disp('===============================================')
@@ -230,6 +252,7 @@ numLimit = 10^10;
 progMode = 1;
 colorMode = 0;
 displayAll = 0;
+mouth = 1;
 
 % Display image to get pixel coordinates
 warning off
@@ -273,6 +296,14 @@ while 1
         title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
             '  ANGLE MODE'])
         set(hF,'Color',angleModeColor);
+    elseif progMode == 3
+        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  MOUTH MODE'])
+        set(hF,'Color',mouthModeColor);
+    elseif progMode == 4
+        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  STATOCYST MODE'])
+        set(hF,'Color',statModeColor);
     end
     
     
@@ -281,7 +312,7 @@ while 1
         
         % Plot existing data
         hold on
-        h = plotData(pl,cFrame,iPlate,displayAll);
+        h = plotData(pl,cFrame,iPlate,displayAll,body);
         hold off
         
         [x,y,but] = ginput(1);
@@ -290,7 +321,7 @@ while 1
         if isempty(but)
             break
             
-        % Left click
+        % Left click --------------------------------------------------
         elseif but==1 
             
             if progMode == 1
@@ -331,14 +362,21 @@ while 1
                 % Update angle coords
                 pl(iPlate).angleX(iFill) = x.*ones(length(iFill),1);
                 pl(iPlate).angleY(iFill) = y.*ones(length(iFill),1);
-                
+            
+            elseif progMode == 3 % Mouth mode
+                    body.mouthX(cFrame) = x;
+                    body.mouthY(cFrame) = y;
+                    
+            elseif progMode == 4 % Statocyst mode
+                    body.statX(cFrame) = x;
+                    body.statY(cFrame) = y;        
             end
             
             % Advance frame
             %cFrame = min([cFrame+1 seq.numFrames]);
             break
             
-        % Right click    
+        % Right click --------------------------------------------------  
         elseif but==3 
             
             % Tip mode
@@ -378,7 +416,7 @@ while 1
                 pl(iPlate).angleY(iFill) = nan(length(iFill),1);
             
             % Angle mode
-            elseif progMode == 2
+            elseif progMode==2
                 
                 % Locate slices after present that have been modified
                 tmp = find(pl(iPlate).baseMod);
@@ -395,10 +433,16 @@ while 1
                 pl(iPlate).angleX(iFill) = nan(length(iFill),1);
                 pl(iPlate).angleY(iFill) = nan(length(iFill),1);
                 
+            elseif progMode == 3 % Mouth mode
+                    body.mouthX(cFrame) = nan;
+                    body.mouthY(cFrame) = nan;
+                    
+            elseif progMode == 4 % Statocyst mode
+                    body.statX(cFrame) = nan;
+                    body.statY(cFrame) = nan;        
+               
             end
             
-            % Back one frame
-            %cFrame = max([cFrame-1 1]);
             break
             
         % If escape    
@@ -415,7 +459,7 @@ while 1
             ylim_c = ylim;   
             
         % If 'b'
-        elseif (but==98) || (but==116)
+        elseif (but==98) 
             if progMode == 1
                 progMode = 0;
             elseif progMode == 0
@@ -454,13 +498,11 @@ while 1
         
         % If spacebar or right arrow    
         elseif (but==32) || (but==29) 
-            % Advance frame, if in base or tip mode
-            if (progMode==1) || (progMode==0)
-                cFrame = min([cFrame+1 seq.numFrames]);
-                break
+            
+            mouth = 1;
                 
             % If angle mode, advace to next keyframe    
-            elseif progMode==2
+            if progMode==2
                 % Locate slices after present that have been modified
                 tmp = find(pl(iPlate).baseMod);
                 idx = tmp((tmp>cFrame));
@@ -472,17 +514,19 @@ while 1
                 end
                 
                 clear tmp idx
+    
+            % Advance frame, if in base or tip mode
+            else 
+                cFrame = min([cFrame+1 seq.numFrames]); 
                 
-                break
             end
+            
+            break
             
         % If left arrow
         elseif but== 28
-            if (progMode==1) || (progMode==0)
-            cFrame = max([cFrame-1 1]);
-            break
             
-            elseif progMode==2
+            if progMode==2
                 
                 % Locate slices before present that have been modified
                 tmp = find(pl(iPlate).baseMod);
@@ -496,8 +540,12 @@ while 1
                 
                 clear tmp idx
                 
-                break
+            else 
+                cFrame = max([cFrame-1 1]);
+
             end
+            
+            break
             
         % If -
         elseif but==45
@@ -513,7 +561,7 @@ while 1
                 break
             end
             
-        % If 'a'  
+        % If 'a' (enter angle mode)
         elseif but==97
             
             if progMode ~=2
@@ -546,6 +594,20 @@ while 1
         elseif but==112
             [cFrame,iPlate,pl] = continue_plate(pl); 
             break
+        
+        % If 'm' (mouth landmark mode)
+        elseif but==109
+            
+            progMode = 3;
+            
+            break
+        
+        % If 't' (statocyst mode)
+        elseif but==116
+            
+            progMode = 4;
+            
+            break    
             
         end
         
@@ -554,6 +616,7 @@ while 1
     end
     
     save([imPath filesep 'plate_data.mat'],'pl')
+    save([imPath filesep 'body_data.mat'],'body')
     
     if isempty(but) || (but==27)
         break
@@ -563,7 +626,7 @@ end
 close;
 
 
-function h = plotData(pl,cFrame,iPlate,displayAll)
+function h = plotData(pl,cFrame,iPlate,displayAll,body)
 
 % Offset (in ix) for text
 offset = 7;
@@ -580,7 +643,11 @@ if displayAll
     iPlate = 1:length(pl);
 end
 
-h = [];
+h(1,1) = plot(body.mouthX(cFrame),body.mouthY(cFrame),'mo');
+h(2,1) = plot(body.statX(cFrame),body.statY(cFrame),'m+');
+h(3,1) = plot([body.mouthX(cFrame) body.statX(cFrame)],...
+            [body.mouthY(cFrame) body.statY(cFrame)],'m-');
+
 
 for i = 1:length(iPlate)
     
