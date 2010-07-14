@@ -230,14 +230,17 @@ disp(['  - - skip ' num2str(frameSkip) ' frames backward']);
 disp( '  s - change interval for skipping forward and backward');
 disp( '  j - jump to frame number');
 disp(' ')
-disp( '  z - zoom mode (return to exit)'); 
-disp( '  b - toggle base mode');  
-disp( '  c - toggle color mode'); 
-disp( '  d - toggle displaying all comb plates'); 
-disp( '  a - toggle angle mode');
 disp( '  p - jump to another comb plate');
-disp( '  m - toggle mouth points mode');
-disp( '  t - toggle statocyst points mode');
+disp( '  d - toggle displaying all comb plates');
+disp(' ')
+disp( '  c - Toggle color display mode'); 
+disp( '  z - Zoom mode (return to exit)'); 
+
+disp( '  b - Base mode');
+disp( '  t - Tip mode');
+disp( '  a - Angle mode');
+disp( '  m - Mouth points mode');
+disp( '  o - Statocyst mode');
 disp(' ')
 disp('Press return or esc when done collecting.')
 disp('===============================================')
@@ -590,7 +593,7 @@ while 1
             
             break
         
-        % If 'p'
+        % If 'p' (jump to another comb plate)
         elseif but==112
             [cFrame,iPlate,pl] = continue_plate(pl); 
             break
@@ -602,12 +605,19 @@ while 1
             
             break
         
-        % If 't' (statocyst mode)
-        elseif but==116
+        % If 'o' (statocyst mode)
+        elseif but==111
             
             progMode = 4;
             
-            break    
+            break  
+            
+        % If 't' (tip mode)    
+        elseif but==116
+            
+            progMode = 1;
+            
+            break  
             
         end
         
