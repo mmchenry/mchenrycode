@@ -58,157 +58,160 @@ clear fileNames numFrames
 
 %% Prompt for what to do in this session
 
-% Look for data
-a = dir([imPath filesep 'plate_data.mat']);
-
-% Load or create structure, if no file
-if ~isempty(a)
-    
-    load([imPath filesep 'plate_data.mat']);
-    
-    % Make plate list
-    if isempty(pl)
-        plNums = [];
-    else
-        for i = 1:length(pl)
-            plNums{i} = num2str(pl(i).plate_num);
-        end
-    end
-    
-else
-    
-    % Otherwise, cerate empty lists
-    pl(1).plate_num = [];
-    plNums{1}       = ' ';
-    
-end
-
 % Look for body data
 aBody = dir([imPath filesep 'body_data.mat']);
 
 % Load or create structure, if no file
-if ~isempty(aBody)
-    
-    load([imPath filesep 'body_data.mat']);
+if isempty(aBody)
 
-else
+    beep
+    disp('You first need to collect body coordinates . . .')
+    disp(' ')
     
     body.statX  = nan(seq.numFrames,1);
     body.statY  = nan(seq.numFrames,1);
     body.mouthX = nan(seq.numFrames,1);
     body.mouthY = nan(seq.numFrames,1);
     
-end
-
-% Ask what to do this time
-but = questdlg('What do you want to do?','Session question',...
-               'Start tracking new comb plate',...
-               'Continue an old comb plate',...
-               'Delete data on a comb plate',...
-               'Start tracking new comb plate');
-  
-% Break, if cancelled           
-if isempty(but)
-    return
-end
-
-switch but
-    case 'Start tracking new comb plate'
+else  
+    
+    % Load body data (structure 'body')
+    load([imPath filesep 'body_data.mat'])
+    
+    % Look for plate data
+    a = dir([imPath filesep 'plate_data.mat']);
+    
+    % Load or create structure, if no file
+    if ~isempty(a)
         
-        if isempty(a)
-            iPlate = 1;
+        load([imPath filesep 'plate_data.mat']);
+        
+        % Make plate list
+        if isempty(pl)
+            plNums = [];
         else
-            iPlate = length(pl)+1;
-        end
-        
-        answer = inputdlg({'What is the plate number?'},' ',1,{'1'});
-        
-        for i = 1:length(plNums)
-            if strcmp(plNums{i},answer)
-                error('Plate number already started')
+            for i = 1:length(pl)
+                plNums{i} = num2str(pl(i).plate_num);
             end
         end
         
-        % Set current frame to one
-        cFrame = 1;
+    else
         
-        % Create fields for new comb plate
-        pl(iPlate).plate_num = str2num(answer{1});
-        pl(iPlate).baseX = nan(seq.numFrames,1);
-        pl(iPlate).baseY = nan(seq.numFrames,1);
-        pl(iPlate).baseMod = zeros(seq.numFrames,1);
-        pl(iPlate).tipX  = nan(seq.numFrames,1);
-        pl(iPlate).tipY  = nan(seq.numFrames,1);
-        pl(iPlate).angleX= nan(seq.numFrames,1);
-        pl(iPlate).angleY= nan(seq.numFrames,1);
-
-        clear answer
+        % Otherwise, cerate empty lists
+        pl(1).plate_num = [];
+        plNums{1}       = ' ';
         
-        
-    case 'Continue an old comb plate'
-        
-        if isempty(a) || isempty(pl)
-            error('No plate data exist')
-        end
-        
-        [cFrame,iPlate,pl] = continue_plate(pl);
- 
-        
-    case 'Delete data on a comb plate'
-        
-        if isempty(a)
-            error('No data file exists')
-        end
-
-        
-        % Prompt for selection
-        [s,v] = listdlg('PromptString','Select plate number',...
-                        'SelectionMode','single',...
-                        'ListString',plNums);
-        if isempty(s)
-            return
-        end
-        
-        for i=1:length(pl)
-            if pl(i).plate_num==str2num(plNums{s})
-                iPlate = i;
-                break
-            end
-        end
-        
-        % Confirm delete
-        but2 = questdlg(['Are you sure you want to delete plate ' ...
-                        plNums{s} '?'],'Warning','Yes - delete',...
-                        'No - Cancel','No - Cancel');
-                    
-        % Cancel or execute
-        switch but2
-            case 'No - Cancel'
-                return
-                
-            case 'Yes - delete'
-                if (s==1) && (length(pl)==1)
-                    pl = [];
-                elseif (s==1) && (length(pl)>1)
-                    pl = pl(2:end);
-                elseif s==length(pl)
-                    pl = pl(1:end-1);
-                else
-                    pl = pl([1:s-1 s+1:end]);
-                end
-                
-                save([imPath filesep 'plate_data.mat'],'pl')
-                return
-        end
-        
-    case 'Cancel'
-        
+    end
+    
+    % Ask what to do this time
+    but = questdlg('What do you want to do?','Session question',...
+        'Start tracking new comb plate',...
+        'Continue an old comb plate',...
+        'Delete data on a comb plate',...
+        'Start tracking new comb plate');
+    
+    % Break, if cancelled
+    if isempty(but)
         return
+    end
+    
+    switch but
+        case 'Start tracking new comb plate'
+            
+            if isempty(a)
+                iPlate = 1;
+            else
+                iPlate = length(pl)+1;
+            end
+            
+            answer = inputdlg({'What is the plate number?'},' ',1,{'1'});
+            
+            for i = 1:length(plNums)
+                if strcmp(plNums{i},answer)
+                    error('Plate number already started')
+                end
+            end
+            
+            % Set current frame to one
+            cFrame = 1;
+            
+            % Create fields for new comb plate
+            pl(iPlate).plate_num = str2num(answer{1});
+            pl(iPlate).baseX = nan(seq.numFrames,1);
+            pl(iPlate).baseY = nan(seq.numFrames,1);
+            pl(iPlate).baseMod = zeros(seq.numFrames,1);
+            pl(iPlate).tipX  = nan(seq.numFrames,1);
+            pl(iPlate).tipY  = nan(seq.numFrames,1);
+            pl(iPlate).angleX= nan(seq.numFrames,1);
+            pl(iPlate).angleY= nan(seq.numFrames,1);
+            
+            clear answer
+            
+            
+        case 'Continue an old comb plate'
+            
+            if isempty(a) || isempty(pl)
+                error('No plate data exist')
+            end
+            
+            [cFrame,iPlate,pl] = continue_plate(pl);
+            
+            
+        case 'Delete data on a comb plate'
+            
+            if isempty(a)
+                error('No data file exists')
+            end
+            
+            
+            % Prompt for selection
+            [s,v] = listdlg('PromptString','Select plate number',...
+                'SelectionMode','single',...
+                'ListString',plNums);
+            if isempty(s)
+                return
+            end
+            
+            for i=1:length(pl)
+                if pl(i).plate_num==str2num(plNums{s})
+                    iPlate = i;
+                    break
+                end
+            end
+            
+            % Confirm delete
+            but2 = questdlg(['Are you sure you want to delete plate ' ...
+                plNums{s} '?'],'Warning','Yes - delete',...
+                'No - Cancel','No - Cancel');
+            
+            % Cancel or execute
+            switch but2
+                case 'No - Cancel'
+                    return
+                    
+                case 'Yes - delete'
+                    if (s==1) && (length(pl)==1)
+                        pl = [];
+                    elseif (s==1) && (length(pl)>1)
+                        pl = pl(2:end);
+                    elseif s==length(pl)
+                        pl = pl(1:end-1);
+                    else
+                        pl = pl([1:s-1 s+1:end]);
+                    end
+                    
+                    save([imPath filesep 'plate_data.mat'],'pl')
+                    return
+            end
+            
+        case 'Cancel'
+            
+            return
+    end
+    
 end
 
-
-
-%% Acquisition mode
+%% Prep for acquisition mode
 
 baseModeColor  = [.8 .4 .4];
 angleModeColor = [.7 .7 .9];
@@ -232,14 +235,13 @@ disp( '  j - jump to frame number');
 disp(' ')
 disp( '  p - jump to another comb plate');
 disp( '  d - toggle displaying all comb plates');
-disp(' ')
 disp( '  c - Toggle color display mode'); 
 disp( '  z - Zoom mode (return to exit)'); 
-
+disp(' ')
 disp( '  b - Base mode');
 disp( '  t - Tip mode');
 disp( '  a - Angle mode');
-disp( '  m - Mouth points mode');
+disp( '  m - Mouth mode');
 disp( '  o - Statocyst mode');
 disp(' ')
 disp('Press return or esc when done collecting.')
@@ -268,7 +270,7 @@ xlim_c = xlim;
 ylim_c = ylim;
 
 
-% Loop for interactive mode
+%% Start loop for each new frame
 while 1
     
     warning off
@@ -287,6 +289,11 @@ while 1
     xlim(xlim_c);
     ylim(ylim_c);
     
+    % Initialize coordinate system
+    S = nan(2);
+    origin = nan(1,2);
+    
+    % Change display, depending on mode
     if progMode == 1
         title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
             '  TIP MODE'])
@@ -310,14 +317,15 @@ while 1
     end
     
     
-    % Loop for current frame
+    %% Start loop for acquiring points
     while 1 
-        
+                
         % Plot existing data
         hold on
-        h = plotData(pl,cFrame,iPlate,displayAll,body);
+        h = plotData(pl,cFrame,iPlate,displayAll,body,origin,S);
         hold off
         
+        % Prompt for single click
         [x,y,but] = ginput(1);
         
         % If return
@@ -327,50 +335,182 @@ while 1
         % Left click --------------------------------------------------
         elseif but==1 
             
+            % Tip mode
             if progMode == 1
                 pl(iPlate).tipX(cFrame) = x;
                 pl(iPlate).tipY(cFrame) = y;
                 
+                % Base mode
             elseif progMode == 0
+                
+                % Check that mouth and statocyst points are defined
+                if isnan(body.mouthX(cFrame))
+                    beep
+                    disp(' ')
+                    disp('You need to first define the mouth coordinate for this frame')
+                    progMode = 3;
+                    break
+                    
+                elseif isnan(body.statX(cFrame))
+                    beep
+                    disp(' ')
+                    disp('You need to define the statocyst coordinate for this frame')
+                    progMode = 4;
+                    break
+                    
+                % Otherwise, define coordinate system
+                else
+                    origin = [mean([body.mouthX(cFrame) body.statX(cFrame)]) ...
+                        mean([body.mouthY(cFrame) body.statY(cFrame)])];
+                    S = localSystem(origin,[body.mouthX(cFrame) body.mouthY(cFrame)]);
+                end
+            
                 % Set that the current base value has been modified
                 pl(iPlate).baseMod(cFrame) = 1;
                 
-                % Locate slices after present that have been modified
-                tmp = find(pl(iPlate).baseMod);
+                % Define frames that have body coordinates
+                idx_b = ~isnan(body.mouthX) & ~isnan(body.statX);
+                
+                % Among those having body coordinate, locate keyframes 
+                % after present 
+                tmp = find(pl(iPlate).baseMod & idx_b);
                 idx = tmp((tmp>cFrame));
                 
                 % Define interval over which to define the base coords
+                % (i.e. up to next keyframe)
                 if isempty(idx)
-                    iFill = min([cFrame seq.numFrames]):seq.numFrames;
+                    iFill = min([cFrame seq.numFrames]):find(idx_b,1,'last');
                 else
                     iFill = min([cFrame seq.numFrames]):idx(1);
                 end
+                
+                % Define base coordinate in body system
+                [xB,yB] = globalToLocal([x y],origin,S);
+                
+                % Loop through each frame of the interval
+                for i = 1:length(iFill)
+                    
+                    % Check for gap in body data
+                    if isnan(body.statX(iFill(i))) || ...
+                            isnan(body.mouthX(iFill(i)))
+                        break
+                    end
+                    
+                    % Define origin and transform
+                    or_c = [mean([body.mouthX(iFill(i)) body.statX(iFill(i))]) ...
+                            mean([body.mouthY(iFill(i)) body.statY(iFill(i))])];
+                    S_c  = localSystem(origin,[body.mouthX(iFill(i)) ...
+                                               body.mouthY(iFill(i))]);
+                                           
+                    % Transform body system point into global coordinates
+                    [x_c,y_c] = localToGlobal([xB yB],or_c,S_c);
+                    
+                    % Store coordinates
+                    pl(iPlate).baseX(iFill(i)) = x_c;
+                    pl(iPlate).baseY(iFill(i)) = y_c;
+                    
+                    clear x_c y_c or_c S_c
+                end
+                
+                clear xB yB iFill idx_b tmp
                 
                 % Update base coords
-                pl(iPlate).baseX(iFill) = x.*ones(length(iFill),1);
-                pl(iPlate).baseY(iFill) = y.*ones(length(iFill),1);
+                %pl(iPlate).baseX(iFill) = x.*ones(length(iFill),1);
+                %pl(iPlate).baseY(iFill) = y.*ones(length(iFill),1);
             
+            % Angle mode
             elseif progMode == 2
-                % Locate slices after present that have been modified
-                tmp = find(pl(iPlate).baseMod);
+                % Check that mouth and statocyst points are defined
+                if isnan(body.mouthX(cFrame))
+                    beep
+                    disp(' ')
+                    disp('You need to first define the mouth coordinate for this frame')
+                    progMode = 3;
+                    break
+                    
+                elseif isnan(body.statX(cFrame))
+                    beep
+                    disp(' ')
+                    disp('You need to define the statocyst coordinate for this frame')
+                    progMode = 4;
+                    break
+                    
+                % Otherwise, define coordinate system
+                else
+                    origin = [mean([body.mouthX(cFrame) body.statX(cFrame)]) ...
+                        mean([body.mouthY(cFrame) body.statY(cFrame)])];
+                    S = localSystem(origin,[body.mouthX(cFrame) body.mouthY(cFrame)]);
+                end
+                
+                % Define frames that have body coordinates
+                idx_b = ~isnan(body.mouthX) & ~isnan(body.statX);
+                
+                % Among those having body coordinate, locate keyframes 
+                % after present 
+                tmp = find(pl(iPlate).baseMod & idx_b);
                 idx = tmp((tmp>cFrame));
                 
                 % Define interval over which to define the base coords
+                % (i.e. up to next keyframe)
                 if isempty(idx)
-                    iFill = min([cFrame seq.numFrames]):seq.numFrames;
+                    iFill = min([cFrame seq.numFrames]):find(idx_b,1,'last');
                 else
                     iFill = min([cFrame seq.numFrames]):idx(1);
                 end
                 
-                % Update angle coords
-                pl(iPlate).angleX(iFill) = x.*ones(length(iFill),1);
-                pl(iPlate).angleY(iFill) = y.*ones(length(iFill),1);
+                % Define base coordinate in body system
+                [xB,yB] = globalToLocal([x y],origin,S);
+                
+                % Loop through each frame of the interval
+                for i = 1:length(iFill)
+                    
+                    % Check for gap in body data
+                    if isnan(body.statX(iFill(i))) || ...
+                            isnan(body.mouthX(iFill(i)))
+                        break
+                    end
+                    
+                    % Define origin and transform
+                    or_c = [mean([body.mouthX(iFill(i)) body.statX(iFill(i))]) ...
+                            mean([body.mouthY(iFill(i)) body.statY(iFill(i))])];
+                    S_c  = localSystem(origin,[body.mouthX(iFill(i)) ...
+                                               body.mouthY(iFill(i))]);
+                                           
+                    % Transform body system point into global coordinates
+                    [x_c,y_c] = localToGlobal([xB yB],or_c,S_c);
+                    
+                    % Store coordinates
+                    pl(iPlate).angleX(iFill(i)) = x_c;
+                    pl(iPlate).angleY(iFill(i)) = y_c;
+                    
+                    clear x_c y_c or_c S_c
+                end
+                
+                clear xB yB iFill idx_b tmp
+                
+                
+%                 % Locate slices after present that have been modified
+%                 tmp = find(pl(iPlate).baseMod);
+%                 idx = tmp((tmp>cFrame));
+%                 
+%                 % Define interval over which to define the base coords
+%                 if isempty(idx)
+%                     iFill = min([cFrame seq.numFrames]):seq.numFrames;
+%                 else
+%                     iFill = min([cFrame seq.numFrames]):idx(1);
+%                 end
+%                 
+%                 % Update angle coords
+%                 pl(iPlate).angleX(iFill) = x.*ones(length(iFill),1);
+%                 pl(iPlate).angleY(iFill) = y.*ones(length(iFill),1);
             
-            elseif progMode == 3 % Mouth mode
+            % Mouth mode
+            elseif progMode == 3 
                     body.mouthX(cFrame) = x;
                     body.mouthY(cFrame) = y;
-                    
-            elseif progMode == 4 % Statocyst mode
+            
+            % Statocyst mode
+            elseif progMode == 4 
                     body.statX(cFrame) = x;
                     body.statY(cFrame) = y;        
             end
@@ -463,12 +603,9 @@ while 1
             
         % If 'b'
         elseif (but==98) 
-            if progMode == 1
-                progMode = 0;
-            elseif progMode == 0
-                progMode = 1;
-            end
-            break
+            
+           progMode = 0;
+           break
             
         % If 'c'
         elseif but==99
@@ -625,9 +762,11 @@ while 1
         
     end
     
+    % Save data before changing frames
     save([imPath filesep 'plate_data.mat'],'pl')
     save([imPath filesep 'body_data.mat'],'body')
     
+    % Break out of frame change loop, if return or escape
     if isempty(but) || (but==27)
         break
     end
@@ -636,14 +775,12 @@ end
 close;
 
 
-function h = plotData(pl,cFrame,iPlate,displayAll,body)
+function h = plotData(pl,cFrame,iPlate,displayAll,body,origin,S)
 
 % Offset (in ix) for text
 offset = 7;
 
-% number of priot point to display
-numPts = 5;
-
+% Define current plate
 iPlate_c = iPlate;
 
 hold on
@@ -653,22 +790,24 @@ if displayAll
     iPlate = 1:length(pl);
 end
 
+% Plot body points
 h(1,1) = plot(body.mouthX(cFrame),body.mouthY(cFrame),'mo');
 h(2,1) = plot(body.statX(cFrame),body.statY(cFrame),'m+');
 h(3,1) = plot([body.mouthX(cFrame) body.statX(cFrame)],...
             [body.mouthY(cFrame) body.statY(cFrame)],'m-');
+h(4,1) = plot(origin(1),origin(2),'mo');
 
-
+% Loop through plates to be displayed
 for i = 1:length(iPlate)
     
-    % Add angleX and angleY, if not present
+    % Add fields 'angleX' and 'angleY', if not present in 'pl'
     if ~isfield(pl(iPlate(i)),'angleX') || ...
             isempty(pl(iPlate(i)).angleX)
         pl(iPlate(i)).angleX= nan(length(pl(iPlate(i)).tipX),1);
         pl(iPlate(i)).angleY= nan(length(pl(iPlate(i)).tipX),1);
     end
 
-    % Plot current plate
+    % Define points for current plate
     bX = pl(iPlate(i)).baseX(cFrame);
     bY = pl(iPlate(i)).baseY(cFrame);
     tX = pl(iPlate(i)).tipX(cFrame);
@@ -676,34 +815,42 @@ for i = 1:length(iPlate)
     aX = pl(iPlate(i)).angleX(cFrame);
     aY = pl(iPlate(i)).angleY(cFrame);
     
-    num = num2str(pl(iPlate(i)).plate_num);
-    
+    % Plot line btwn base and angle points
     tmp = plot([aX bX],[aY bY],'w-');
+    
+    % Add tmp to handle list, clear tmp
     h = [h;tmp];
     clear tmp
     
+    % Put emphasis on the current plate
     if iPlate_c == iPlate(i)
         tmp = plot([bX tX],[bY tY],'r-',bX,bY,'og',tX,tY,'r+');
     else
         tmp = plot([bX tX],[bY tY],'w-',bX,bY,'ow',tX,tY,'w+');
     end
     
-    h = [h;tmp];
+    % Add tmp to handle list, clear tmp
+    h = [h;tmp]; 
     clear tmp
-    %alpha(h1,0.5)
-    %plot();
     
+    % Plot base point, if present
     if ~isnan(bX)
-        tmp = text(bX-offset,bY+offset,num);
+        
+        tmp = text(bX-offset,bY+offset,...
+                   num2str(pl(iPlate(i)).plate_num));
+               
+        % Add tmp to handle list, clear tmp
         h = [h;tmp];
         clear tmp
         
+        % Put emphasis on the current base
         if iPlate_c == iPlate(i)
             set(h(end),'Color','g')
         else
             set(h(end),'Color','w')
         end
         
+        % Put more emphasis, if keyframe
         if pl(iPlate(i)).baseMod(cFrame)
             set(h(end),'FontWeight','bold')
             set(h(end),'FontAngle','oblique')
@@ -752,3 +899,45 @@ if ~isfield(pl(iPlate),'angleX') || ...
     pl(iPlate).angleX= nan(seq.numFrames,1);
     pl(iPlate).angleY= nan(seq.numFrames,1);
 end
+
+
+function S = localSystem(P1,P2)
+% Defines a transformation vector for a local coordinate system in an
+% inertial frame of reference.  Uses P1 as the origin and P2 to find the
+% direction of the y-axis.  Coordinates must be (1x2) vectors.
+
+if size(P1,1)~=1 || size(P1,2)~=2 ||...
+   size(P2,1)~=1 || size(P2,2)~=2
+    error('Coordinates must be (1x2) vectors');
+end
+
+yAxis       = (P2-P1)./norm(P2-P1);
+xAxis       = [yAxis(2); -yAxis(1)];
+S           = [xAxis yAxis'];
+
+
+function [x,y] = localToGlobal(pts,origin,S)
+
+if size(pts,2)~=2 || size(origin,2)~=2 
+    error('Coordinates must be a (nx2) vector');
+end
+
+pts         = [inv(S)'*pts']';
+pts(:,1)    = pts(:,1)+origin(1);
+pts(:,2)    = pts(:,2)+origin(2);
+x           = pts(:,1);
+y           = pts(:,2);
+
+
+function [x,y] = globalToLocal(pts,origin,S)
+
+if size(pts,2)~=2 || size(origin,2)~=2 
+    error('Coordinates must be a (nx2) vector');
+end
+
+pts(:,1)    = pts(:,1)-origin(1);
+pts(:,2)    = pts(:,2)-origin(2);
+pts         = [S'*pts']';
+x           = pts(:,1);
+y           = pts(:,2);
+
