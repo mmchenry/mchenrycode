@@ -73,143 +73,143 @@ if isempty(aBody)
     body.mouthX = nan(seq.numFrames,1);
     body.mouthY = nan(seq.numFrames,1);
     
-else  
-    
+else   
     % Load body data (structure 'body')
     load([imPath filesep 'body_data.mat'])
+end
+
+% Look for plate data
+a = dir([imPath filesep 'plate_data.mat']);
+
+% Load or create structure, if no file
+if ~isempty(a)
     
-    % Look for plate data
-    a = dir([imPath filesep 'plate_data.mat']);
+    load([imPath filesep 'plate_data.mat']);
     
-    % Load or create structure, if no file
-    if ~isempty(a)
+    % Make plate list
+    if isempty(pl)
+        plNums = [];
+    else
+        for i = 1:length(pl)
+            plNums{i} = num2str(pl(i).plate_num);
+        end
+    end
+    
+else
+    
+    % Otherwise, cerate empty lists
+    pl(1).plate_num = [];
+    plNums{1}       = ' ';
+    
+end
+
+% Ask what to do this time
+but = questdlg('What do you want to do?','Session question',...
+    'Start tracking new comb plate',...
+    'Continue an old comb plate',...
+    'Delete data on a comb plate',...
+    'Start tracking new comb plate');
+
+% Break, if cancelled
+if isempty(but)
+    return
+end
+
+switch but
+    case 'Start tracking new comb plate'
         
-        load([imPath filesep 'plate_data.mat']);
-        
-        % Make plate list
-        if isempty(pl)
-            plNums = [];
+        if isempty(a)
+            iPlate = 1;
         else
-            for i = 1:length(pl)
-                plNums{i} = num2str(pl(i).plate_num);
+            iPlate = length(pl)+1;
+        end
+        
+        answer = inputdlg({'What is the plate number?'},' ',1,{'1'});
+        
+        for i = 1:length(plNums)
+            if strcmp(plNums{i},answer)
+                error('Plate number already started')
             end
         end
         
-    else
+        % Set current frame to one
+        cFrame = 1;
         
-        % Otherwise, cerate empty lists
-        pl(1).plate_num = [];
-        plNums{1}       = ' ';
+        % Create fields for new comb plate
+        pl(iPlate).plate_num = str2num(answer{1});
+        pl(iPlate).baseX = nan(seq.numFrames,1);
+        pl(iPlate).baseY = nan(seq.numFrames,1);
+        pl(iPlate).baseMod = zeros(seq.numFrames,1);
+        pl(iPlate).tipX  = nan(seq.numFrames,1);
+        pl(iPlate).tipY  = nan(seq.numFrames,1);
+        pl(iPlate).angleX= nan(seq.numFrames,1);
+        pl(iPlate).angleY= nan(seq.numFrames,1);
         
-    end
-    
-    % Ask what to do this time
-    but = questdlg('What do you want to do?','Session question',...
-        'Start tracking new comb plate',...
-        'Continue an old comb plate',...
-        'Delete data on a comb plate',...
-        'Start tracking new comb plate');
-    
-    % Break, if cancelled
-    if isempty(but)
-        return
-    end
-    
-    switch but
-        case 'Start tracking new comb plate'
-            
-            if isempty(a)
-                iPlate = 1;
-            else
-                iPlate = length(pl)+1;
-            end
-            
-            answer = inputdlg({'What is the plate number?'},' ',1,{'1'});
-            
-            for i = 1:length(plNums)
-                if strcmp(plNums{i},answer)
-                    error('Plate number already started')
-                end
-            end
-            
-            % Set current frame to one
-            cFrame = 1;
-            
-            % Create fields for new comb plate
-            pl(iPlate).plate_num = str2num(answer{1});
-            pl(iPlate).baseX = nan(seq.numFrames,1);
-            pl(iPlate).baseY = nan(seq.numFrames,1);
-            pl(iPlate).baseMod = zeros(seq.numFrames,1);
-            pl(iPlate).tipX  = nan(seq.numFrames,1);
-            pl(iPlate).tipY  = nan(seq.numFrames,1);
-            pl(iPlate).angleX= nan(seq.numFrames,1);
-            pl(iPlate).angleY= nan(seq.numFrames,1);
-            
-            clear answer
-            
-            
-        case 'Continue an old comb plate'
-            
-            if isempty(a) || isempty(pl)
-                error('No plate data exist')
-            end
-            
-            [cFrame,iPlate,pl] = continue_plate(pl);
-            
-            
-        case 'Delete data on a comb plate'
-            
-            if isempty(a)
-                error('No data file exists')
-            end
-            
-            
-            % Prompt for selection
-            [s,v] = listdlg('PromptString','Select plate number',...
-                'SelectionMode','single',...
-                'ListString',plNums);
-            if isempty(s)
-                return
-            end
-            
-            for i=1:length(pl)
-                if pl(i).plate_num==str2num(plNums{s})
-                    iPlate = i;
-                    break
-                end
-            end
-            
-            % Confirm delete
-            but2 = questdlg(['Are you sure you want to delete plate ' ...
-                plNums{s} '?'],'Warning','Yes - delete',...
-                'No - Cancel','No - Cancel');
-            
-            % Cancel or execute
-            switch but2
-                case 'No - Cancel'
-                    return
-                    
-                case 'Yes - delete'
-                    if (s==1) && (length(pl)==1)
-                        pl = [];
-                    elseif (s==1) && (length(pl)>1)
-                        pl = pl(2:end);
-                    elseif s==length(pl)
-                        pl = pl(1:end-1);
-                    else
-                        pl = pl([1:s-1 s+1:end]);
-                    end
-                    
-                    save([imPath filesep 'plate_data.mat'],'pl')
-                    return
-            end
-            
-        case 'Cancel'
-            
+        clear answer
+        
+        
+    case 'Continue an old comb plate'
+        
+        if isempty(a) || isempty(pl)
+            error('No plate data exist')
+        end
+        
+        [cFrame,iPlate,pl] = continue_plate(pl);
+        
+        
+    case 'Delete data on a comb plate'
+        
+        if isempty(a)
+            error('No data file exists')
+        end
+        
+        
+        % Prompt for selection
+        [s,v] = listdlg('PromptString','Select plate number',...
+            'SelectionMode','single',...
+            'ListString',plNums);
+        if isempty(s)
             return
-    end
-    
+        end
+        
+        for i=1:length(pl)
+            if pl(i).plate_num==str2num(plNums{s})
+                iPlate = i;
+                break
+            end
+        end
+        
+        % Confirm delete
+        but2 = questdlg(['Are you sure you want to delete plate ' ...
+            plNums{s} '?'],'Warning','Yes - delete',...
+            'No - Cancel','No - Cancel');
+        
+        % Cancel or execute
+        switch but2
+            case 'No - Cancel'
+                return
+                
+            case 'Yes - delete'
+                if (s==1) && (length(pl)==1)
+                    pl = [];
+                elseif (s==1) && (length(pl)>1)
+                    pl = pl(2:end);
+                elseif s==length(pl)
+                    pl = pl(1:end-1);
+                else
+                    pl = pl([1:s-1 s+1:end]);
+                end
+                
+                save([imPath filesep 'plate_data.mat'],'pl')
+                return
+        end
+        
+    case 'Cancel'
+        
+        return
 end
+
+
 
 %% Prep for acquisition mode
 
