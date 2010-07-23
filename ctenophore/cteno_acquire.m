@@ -244,6 +244,8 @@ disp( '  a - Angle mode');
 disp( '  m - Mouth mode');
 disp( '  o - Statocyst mode');
 disp(' ')
+disp( '  r - run body coord analysis');
+disp(' ')
 disp('Press return or esc when done collecting.')
 disp('===============================================')
 disp(' ');
@@ -755,7 +757,12 @@ while 1
             progMode = 1;
             
             break  
+        
+        % If 'r' (run body coordinate analysis)
+        elseif but==114
+            disp('This feature has not been implemented yet');
             
+            break
         end
         
         delete(h);
