@@ -297,24 +297,24 @@ while 1
     
     % Change display, depending on mode
     if progMode == 1
-        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
-            '  TIP MODE'])
+        hT = title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  TIP MODE']);
         set(hF,'Color','w')
     elseif progMode == 0
-        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
-            '  BASE MODE'])
+        hT = title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  BASE MODE']);
         set(hF,'Color',baseModeColor);
     elseif progMode == 2
-        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
-            '  ANGLE MODE'])
+        hT = title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  ANGLE MODE']);
         set(hF,'Color',angleModeColor);
     elseif progMode == 3
-        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
-            '  MOUTH MODE'])
+        hT = title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  MOUTH MODE']);
         set(hF,'Color',mouthModeColor);
     elseif progMode == 4
-        title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
-            '  STATOCYST MODE'])
+        hT = title(['Frame ' num2str(cFrame) ' of ' num2str(seq.numFrames)...
+            '  STATOCYST MODE']);
         set(hF,'Color',statModeColor);
     end
     
@@ -760,7 +760,17 @@ while 1
         
         % If 'r' (run body coordinate analysis)
         elseif but==114
+            % Get current title, update title
+            tStr = get(hT,'String');
+            title('Running body coordinate analysis . . .')
+            
             disp('This feature has not been implemented yet');
+            
+            % Return title to previous
+            hT = title(tStr);
+            
+            % Clear variables
+            clear tStr
             
             break
         end
