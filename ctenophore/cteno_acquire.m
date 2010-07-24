@@ -763,21 +763,29 @@ while 1
         
         % If 'r' (run body coordinate analysis)
         elseif but==114
-            % Get current title, update title
-            tStr = get(hT,'String');
-            title('Running body coordinate analysis . . .')
+            answer = questdlg(['Enter in this mode only after ' ...
+                'collecting all body coordinates'],'Warning',...
+                'Continue','Cancel','Continue');
             
-            %disp('This feature has not been implemented yet');
-            body = bodyAnalysis(body);
-            
-            
-            % Return title to previous
-            hT = title(tStr);
-            
-            % Clear variables
-            clear tStr
+            if strcmp(answer,'Continue')
+                
+                % Get current title, update title
+                tStr = get(hT,'String');
+                title('Running body coordinate analysis . . .')
+                
+                %disp('This feature has not been implemented yet');
+                body = bodyAnalysis(body);
+                
+                
+                % Return title to previous
+                hT = title(tStr);
+                
+                % Clear variables
+                clear tStr
+            end
             
             break
+            
         end
         
         delete(h);
@@ -846,10 +854,10 @@ mX(~isnan(mX)) = butter_filt(mX(~isnan(mX)),1,1/500,'low');
 mY(~isnan(mY)) = butter_filt(mY(~isnan(mY)),1,1/500,'low'); 
 
 % Store filtered data
- body.statX  = sX;
- body.statY  = sY;
- body.mouthX = mX;
- body.mouthY = mY;
+body.statX  = sX;
+body.statY  = sY;
+body.mouthX = mX;
+body.mouthY = mY;
 
 
 function h = plotData(pl,cFrame,iPlate,displayAll,body,origin,S)
