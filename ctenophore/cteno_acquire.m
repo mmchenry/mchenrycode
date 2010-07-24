@@ -261,9 +261,12 @@ colorMode = 0;
 displayAll = 0;
 mouth = 1;
 
+cFrame = 301
+
+
 % Display image to get pixel coordinates
 warning off
-im  = imread([imPath filesep seq.fileNames{1}]); 
+im  = imread([imPath filesep seq.fileNames{cFrame}]); 
 hIm = imshow(im);
 warning on
 
@@ -764,7 +767,9 @@ while 1
             tStr = get(hT,'String');
             title('Running body coordinate analysis . . .')
             
-            disp('This feature has not been implemented yet');
+            %disp('This feature has not been implemented yet');
+            body = bodyAnalysis(body);
+            
             
             % Return title to previous
             hT = title(tStr);
@@ -790,6 +795,61 @@ while 1
     
 end
 close;
+
+function body = bodyAnalysis(body)
+
+% Extract points
+if isfield(body,'raw')
+    sX = body.raw.statX;
+    sY = body.raw.statY;
+    mX = body.raw.mouthX;
+    mY = body.raw.mouthY;
+    
+else
+    sX = body.statX;
+    sY = body.statY;
+    mX = body.mouthX;
+    mY = body.mouthY;
+    
+    % Store data away in raw
+    body.raw.statX  = sX;
+    body.raw.statY  = sY;
+    body.raw.mouthX = mX;
+    body.raw.mouthY = mY;
+end
+
+% Define index
+idx = 1:length(sX);
+
+% Interpolate to remove nans between points
+warning off
+
+iNan = isnan(sX);
+sX(iNan) = interp1(idx(~iNan),sX(~iNan),idx(iNan));
+
+iNan = isnan(sY);
+sY(iNan) = interp1(idx(~iNan),sY(~iNan),idx(iNan));
+
+iNan = isnan(mX);
+mX(iNan) = interp1(idx(~iNan),mX(~iNan),idx(iNan));
+
+iNan = isnan(mY);
+mY(iNan) = interp1(idx(~iNan),mY(~iNan),idx(iNan));
+
+warning on
+
+% Filter the data
+sX(~isnan(sX)) = butter_filt(sX(~isnan(sX)),1,1/500,'low'); 
+sY(~isnan(sY)) = butter_filt(sY(~isnan(sY)),1,1/500,'low'); 
+
+mX(~isnan(mX)) = butter_filt(mX(~isnan(mX)),1,1/500,'low'); 
+mY(~isnan(mY)) = butter_filt(mY(~isnan(mY)),1,1/500,'low'); 
+
+% Store filtered data
+ body.statX  = sX;
+ body.statY  = sY;
+ body.mouthX = mX;
+ body.mouthY = mY;
 
 
 function h = plotData(pl,cFrame,iPlate,displayAll,body,origin,S)
@@ -957,4 +1017,52 @@ pts(:,2)    = pts(:,2)-origin(2);
 pts         = [S'*pts']';
 x           = pts(:,1);
 y           = pts(:,2);
+
+
+function data_filtered = butter_filt(data,sample_rate,cut_freq,type) 
+% High-pass or low-pass butterworth filter
+
+% All frequency values are in Hz.
+
+% Nyquist freq.
+Nqst = sample_rate/2;   
+
+% Calculate stopband frequency
+if strcmp(type,'high')
+    stop_freq = max([(cut_freq - Nqst/10) .01]);  
+
+elseif strcmp(type,'low')
+    stop_freq = min([(cut_freq + Nqst/10) (Nqst-.01)]); 
+ 
+end
+
+% Stopband Attenuation (dB)
+Astop = 30;
+
+% Passband Ripple (dB)
+Apass = 1;   
+
+% Normalise the cutoff freq. to the Nyquist freq
+Wp = cut_freq/Nqst;
+
+% Normalise the stoppass freq. to the Nyquist freq
+Ws = stop_freq/Nqst;
+
+% Check cutoff
+if (Wp > 1) || (Ws > 1)
+    error('Cutoff or bandpass frequencies cannot exceed the Nyquist freq')
+end
+
+% Calculate the order from the parameters using BUTTORD.
+[N,Fc] = buttord(Wp, Ws, Apass, Astop);    
+    
+% Calculate the zpk values using the BUTTER function.
+[B A] = butter(N, Fc, type);
+
+% Plot frequency reponse
+%freqz(B,A,512,sample_rate); 
+
+% Filter the data
+data_filtered   = filtfilt(B,A,data); 
+
 
