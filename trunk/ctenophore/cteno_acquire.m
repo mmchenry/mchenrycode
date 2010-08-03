@@ -261,7 +261,7 @@ colorMode = 0;
 displayAll = 0;
 mouth = 1;
 
-cFrame = 301
+%cFrame = 301
 
 
 % Display image to get pixel coordinates
@@ -770,19 +770,16 @@ while 1
             if strcmp(answer,'Continue')
                 
                 % Get current title, update title
-                tStr = get(hT,'String');
-                title('Running body coordinate analysis . . .')
+                disp(' ')
+                disp('Running body coordinate analysis . . .')
                 
                 %disp('This feature has not been implemented yet');
                 body = bodyAnalysis(body);
                 
-                
-                % Return title to previous
-                hT = title(tStr);
-                
-                % Clear variables
-                clear tStr
             end
+            
+            disp(' . . . done');
+            disp(' ');
             
             break
             
@@ -847,11 +844,11 @@ mY(iNan) = interp1(idx(~iNan),mY(~iNan),idx(iNan));
 warning on
 
 % Filter the data
-sX(~isnan(sX)) = butter_filt(sX(~isnan(sX)),1,1/500,'low'); 
-sY(~isnan(sY)) = butter_filt(sY(~isnan(sY)),1,1/500,'low'); 
+sX(~isnan(sX)) = butter_filt(sX(~isnan(sX)),1,1/50,'low'); 
+sY(~isnan(sY)) = butter_filt(sY(~isnan(sY)),1,1/50,'low'); 
 
-mX(~isnan(mX)) = butter_filt(mX(~isnan(mX)),1,1/500,'low'); 
-mY(~isnan(mY)) = butter_filt(mY(~isnan(mY)),1,1/500,'low'); 
+mX(~isnan(mX)) = butter_filt(mX(~isnan(mX)),1,1/50,'low'); 
+mY(~isnan(mY)) = butter_filt(mY(~isnan(mY)),1,1/50,'low'); 
 
 % Store filtered data
 body.statX  = sX;
