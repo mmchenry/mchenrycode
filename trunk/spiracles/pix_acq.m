@@ -1,0 +1,153 @@
+function pixAcq(fName,pName,frRate)
+% Acquires pixel intensity for a circular region of interest
+%
+% fName - filename of first file in image sequence
+% pName - path for image sequence
+% frRate - Frame rate
+
+
+%% Parameter values
+% Header for file names
+nameHeader = 'Frame_'; 
+
+% Number of points for drawing the roi
+numRoiPts = 100;
+
+% Number of decimal places for frame numbers filename
+numDigits = 4;
+
+% Show the acquisition
+visSteps = 0;
+
+
+%% Initialize for recording
+
+% Prompt to select image sequence
+if nargin < 2
+    [fName,pName] = uigetfile({'*.tif','tif images';...
+        '*.tiff','tiff images';'*.jpg','jpg images'}...
+        ,'Select first image in sequence');
+    if isempty(pName)
+        return
+    end
+end
+
+% Prompt for frame rate
+if nargin < 3
+    answer = inputdlg('Frame rate (fps):',' ',1,{'15'});
+    if isempty(answer)
+        return
+    end
+    frRate = str2num(answer{1});
+end
+
+% Check name header
+if ~strcmp(nameHeader,fName(1:length(nameHeader)))
+    error('Name header incorrect')
+end
+
+% Check number of frames in directory
+a = dir([pName filesep '*.TIF']);
+numFrames = length(a);
+
+% Store parameter values
+d.frameRate = frRate;
+d.numFrames = numFrames;
+d.path      = pName;
+d.nameHead  = nameHeader;
+d.numDigits = numDigits;
+
+clear frameRate
+
+
+%% Interactively define roi
+
+% Show first frame in figure window
+f = figure;
+set(f,'DoubleBuffer','on');
+I = imread([pName filesep a(1).name]);
+imshow(I)
+hold on
+
+% Select center point
+title('Choose center point')
+[xCntr,yCntr] = ginput(1);
+plot(xCntr,yCntr,'r+')
+
+% Define unit circle
+theta = linspace(0,2*pi,numRoiPts);
+xC = cos(theta);
+yC = sin(theta);
+
+% Select circular roi
+title('Choose radius')
+[xT,yT] = ginput(1);
+r = ((xCntr-xT)^2 + (yCntr-yT)^2)^0.5;
+xC = r.*xC + xCntr;
+yC = r.*yC + yCntr;
+roiI = roipoly(I,xC,yC);
+
+% Show selected roi
+plot(xC,yC,'r-')
+pause(0.5)
+
+% Initiate black field, or close fig window
+if visSteps
+    bI = uint8(zeros(size(I,1),size(I,2)));
+else
+    close
+end
+
+% Store info on roi
+d.roiX  = xC;
+d.roiY  = yC;
+
+
+%% Acquire data for each frame
+
+% Loop through frames
+for i = 1:numFrames 
+
+    % Current frame number
+    frNum = ['000' num2str(i)];
+    frName = [nameHeader frNum((end-numDigits+1):end) '.tif'];
+    
+    % Read image
+    I = imread([pName filesep frName]);
+
+    % Visualize roi analyzed
+    if visSteps
+        warning off
+        bI(roiI(:))=I(roiI(:));
+        imshow(bI);
+        title(['Frame ' num2str(i) ' of ' num2str(numFrames)])
+        pause(.1)
+        warning on
+    else
+        disp(['Done frame ' num2str(i) ' of ' num2str(numFrames)])
+    end
+    
+    % Calc & store mean pixel value
+    d.fileName{i}  = frName;
+    d.frameNum(i)  = str2num(frNum);
+    d.pixVal(i)    = mean(double(I(roiI(:))));
+    
+    % Clear variables
+    clear I frName frNum
+end
+
+% if ~visSteps
+%     figure
+% end
+
+% Plot data
+% plot(d.frameNum./d.frameRate,d.pixVal)
+% xlabel('Time (s)')
+% ylabel('Mean pixel intensity')
+
+% Save data
+%[sFileName,sFilePath]= uiputfile('pixdata.mat','Save data');
+%save([sFilePath filesep sFileName],'d');
+
+save([pName filesep 'pixel_data'],'d')
+
