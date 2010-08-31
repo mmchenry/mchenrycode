@@ -33,12 +33,6 @@ end
 a = dir([vPath filesep  '*' nameHead '*.' nameSuffix]);
 
 
-%% Create figure window
-
-% f = figure;
-% set(f,'DoubleBuffer','on');
-
-
 %% Define roi
 
 % Look for roi data
@@ -308,6 +302,8 @@ clear img
 
 %% Step through frames
 
+roiSize = 3;
+
 % Load roi
 %load([vPath filesep 'roi.mat'])
 
@@ -317,26 +313,162 @@ load([vPath filesep 'seq_params.mat'])
 % Create initial image for registration
 imStart = grabFrame(vPath,a,p.startFrame,invert);
 
-% Threshold
-imBW    = ~im2bw(imStart,p.tVal_body);
+% % Threshold
+% imBW    = ~im2bw(imStart,p.tVal_body);
+% 
+% % Fill holes
+% imBW    = bwmorph(imBW,'majority');
 
-% Fill holes
-imBW    = bwmorph(imBW,'majority');
+% Body angle
+angl = (90 - atan2(p.yTail-p.yHead,p.xTail-p.xHead)*(180/pi));
 
 % Turn all else to white
-imStart(~imBW(:)) = 255;
+%imStart(~imBW(:)) = 255;
 
 % Crop 
 xCntr    = mean([p.xHead p.xTail]);
 yCntr    = mean([p.yHead p.yTail]);
-roi      = [xCntr-p.bLength yCntr-p.bLength 2*p.bLength 2*p.bLength];
+roi      = [xCntr-roiSize/2*p.bLength yCntr-roiSize/2*p.bLength ...
+            roiSize*p.bLength roiSize*p.bLength];
 imStart  = imcrop(imStart,roi);
 
-newAngle = getAngle(imStart,p);
+% Rotate image from selected coordinates
+imStart = imrotate(imStart,-angl,'bilinear','crop');
+imStart(imStart==0) = 255;
+
+% Mask out edges
+mWidth = round(roiSize*p.bLength/10);
+imStart(1:mWidth,:)         = 255;
+imStart(end-mWidth:end,:)   = 255;
+imStart(:,1:mWidth)         = 255;
+imStart(:,end-mWidth:end)   = 255;
+
+% Perform radon transform
+theta  = -15:15;
+[R,xp] = radon(imcomplement(imStart),theta);
+
+% Visualize transform
+if 0
+    figure
+    subplot(2,1,1)
+    imagesc(theta, xp, R); colormap(hot);
+    xlabel('theta')
+    axis square
+    subplot(2,1,2)
+    plot(theta,max(R))
+    xlabel('theta')
+    ylabel('R')
+end
+
+% Find rotation from transform
+maxR = max(R);
+angl = theta(maxR==max(maxR));
+imStart = imrotate(imStart,-angl,'bilinear','crop');
+
+% Mask out edges
+mWidth = round(roiSize*p.bLength/10);
+imStart(1:mWidth,:)         = 255;
+imStart(end-mWidth:end,:)   = 255;
+imStart(:,1:mWidth)         = 255;
+imStart(:,end-mWidth:end)   = 255;
+
+% Perform radon transform on transformed image
+theta  = -15:15;
+[ROld,xpOld] = radon(imcomplement(imStart),theta);
+
+imOld = imStart;
+
+clear imStart R xp
 
 % Loop through frames
-for i = p.startFrame:p.endFrame
+for i = p.startFrame+1:p.endFrame
    
+    imNew = grabFrame(vPath,a,i,invert);
+    
+    imNew  = imcrop(imNew,roi);
+    
+    % Rotate image from selected coordinates
+    imNew = imrotate(imNew,-angl,'bilinear','crop');
+    imNew(imNew==0) = 255;
+    
+    % Mask out edges
+    mWidth = round(roiSize*p.bLength/10);
+    imNew(1:mWidth,:)         = 255;
+    imNew(end-mWidth:end,:)   = 255;
+    imNew(:,1:mWidth)         = 255;
+    imNew(:,end-mWidth:end)   = 255;
+    
+    % Perform radon transform
+    [RNew,xpNew] = radon(imcomplement(imNew),theta);
+    
+    % Find rotation from transform
+    maxR = max(RNew);
+    angl = theta(maxR==max(maxR));
+    
+    % Find corresponding displacement at that rotation
+    rVals = RNew(:,theta==angl);
+    displ  = xpNew(rVals==max(rVals));
+    
+    % Rotate image from selected coordinates
+    tmp = imrotate(imNew,-angl,'bilinear','crop');
+    %tmp = imtransform(tmp,'YData',+disp,'bilinear');
+    
+    % Define new roi
+    roi = [roi(1) roi(2)+displ roi(3) roi(4)];
+    
+    % Visualize transforms
+    if 1
+ 
+        figure
+        
+        subplot(3,2,1)
+        imshow(imOld)
+        title('Old frame')
+        axis on
+        
+        subplot(3,2,2)
+        imshow(imNew)
+        title('New frame')
+        axis on
+        
+        subplot(3,2,3)
+        imagesc(theta, xpOld, ROld);
+        colormap(hot);
+        
+        xlabel('theta')
+        axis square
+        
+        subplot(3,2,4)
+        imagesc(theta, xpNew, RNew);
+        colormap(hot);
+        xlabel('theta')
+        
+        axis square
+        
+        subplot(3,2,5)
+        plot(theta,max(ROld))
+        xlabel('theta')
+        ylabel('R')
+        grid on
+        
+        subplot(3,2,6)
+        plot(theta,max(RNew))
+        xlabel('theta')
+        ylabel('R')
+        grid on
+        
+    end
+    
+    
+    
+    
+    
+    theta = -15:15;
+    [R,xp] = radon(imcomplement(imStart),theta);
+    
+    imagesc(theta, xp, R); colormap(hot);
+    xlabel('theta')
+    
     % Load image
     %im = rgb2gray(imread([vPath filesep a(i).name]));
    
