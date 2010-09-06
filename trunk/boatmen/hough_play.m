@@ -1,8 +1,4 @@
-function boat_acq(vPath)
-% 
-% vPath - path to tif files
-% fName - filename of first frame
-% 
+function hough_play
 
 
 %% Parameter values
@@ -342,17 +338,6 @@ k.yHead = k.yCntr + (p.bLength/2)*sin(k.angl);
 k.xTail = k.xCntr - (p.bLength/2)*cos(k.angl);
 k.yTail = k.yCntr - (p.bLength/2)*sin(k.angl);
 
-% % Mask out edges
-% mWidth = round(roiSize*p.bLength/10);
-% imOld(1:mWidth,:)         = 255;
-% imOld(end-mWidth:end,:)   = 255;
-% imOld(:,1:mWidth)         = 255;
-% imOld(:,end-mWidth:end)   = 255;
-% 
-% % Perform radon transform on transformed image
-% [ROld,xpOld] = radon(imcomplement(imOld),theta);
-% 
-% clear imStart R xp
 
 
 %% Step through frames
@@ -365,16 +350,17 @@ for i = 2:length(frames)
     im = grabFrame(vPath,a,frames(i),invert);
 
     % Crop and rotate image
-    [im,roi] = change_image(im,k.angl(i-1),[k.xCntr(i-1) k.yCntr(i-1)],...
+%     [im,roi] = change_image(im,k.angl(i-1),[k.xCntr(i-1) k.yCntr(i-1)],...
+%                       roiSize,p.bLength);
+    [im,roi] = change_image(im,k.angl(i-1),pos,...
                       roiSize,p.bLength);
-    
+                  
+                  
     % Calculate displacement
     [Dpos,Dangl] = calc_disp(im,theta);
     
     % Store body angle
     k.angl(i,1) = k.angl(i-1,1) + Dangl;
-    
-    %Dpos 
     
     % Store body center
     k.xCntr(i,1) = k.xCntr(i-1)+Dpos*cos(k.angl(i));
@@ -387,47 +373,13 @@ for i = 2:length(frames)
     % Store tail position
     k.xTail(i,1) = k.xCntr(i) - (p.bLength/2)*cos(k.angl(i));
     k.yTail(i,1) = k.yCntr(i) - (p.bLength/2)*sin(k.angl(i));
-    
-    % Define new roi
-    %roi = [roi(1) roi(2)-Dpos roi(3) roi(4)];
+
     
     clear Dangl Dpos
     
-%     % Crop to roi
-%     imNew  = imcrop(im,roi);
-%     
-%     % Rotate image from selected coordinates
-%     imNew = imrotate(imNew,-angl,'bilinear','crop');
-%     
-%     % Mask out edges
-%     mWidth = round(roiSize*p.bLength/10);
-%     imNew(1:mWidth,:)         = 255;
-%     imNew(end-mWidth:end,:)   = 255;
-%     imNew(:,1:mWidth)         = 255;
-%     imNew(:,end-mWidth:end)   = 255;
-%     
-%     % Perform radon transform
-%     [RNew,xpNew] = radon(imcomplement(imNew),theta);
-%     
-%     % Find rotation from transform
-%     maxR = max(RNew);
-%     Dang = theta(maxR==max(maxR));
-%     
-%     % Find corresponding displacement at that rotation
-%     rVals  = RNew(:,theta==Dang);
-%     displ  = -xpNew(rVals==max(rVals));
-%     
-%     % Rotate body coordinates
-%     
-%     
-%     % Rotate image from selected coordinates
-%     tmp = imrotate(imNew,-angl,'bilinear','crop');
-%     %tmp = imtransform(tmp,'YData',+disp,'bilinear');
-    
-    
     
     % Visualize kinematics
-    if 1
+    if 0
         warning off
        figure(fig);
        
@@ -597,6 +549,7 @@ roi = [pos(1)-roiSize/2*bLength pos(2)-roiSize/2*bLength ...
 im  = imcrop(im,roi);
 
 % Rotate image from selected coordinates
+% Angle is negative b/c y-axis is flipped
 im = imrotate(im,angl,'bilinear','crop');
 im(im==0) = 255;
 
@@ -624,7 +577,7 @@ rVals  = R(:,theta==Dang);
 Dpos   = xp(rVals==max(rVals));
 
 % Visualize transform
-if 0
+if 1
     figure
     subplot(2,3,1)
     imagesc(theta, xp, R); colormap(hot);
@@ -653,6 +606,24 @@ end
 
 % Convert angle to radians
 Dang = pi*Dang/180;
+
+if 0
+   %subplot(1,2,1)
+   imshow(im)
+   hold on
+   set(gca,'YDir','normal')
+   xC = size(im,2)/2;
+   yC = size(im,1)/2;
+   plot([xC xC+Dpos*cos(Dang)],[yC yC+Dpos*sin(Dang)],'r',...
+       [xC+Dpos*cos(Dang)],[yC+Dpos*sin(Dang)],'rx')
+   grid on
+    axis on
+    hold off
+    
+end
+
+
+
 
 
 function img = grabFrame(dirPath,a,fNum,invert)
