@@ -2,25 +2,87 @@ function compare_spir(pName)
 % Compares two spiracle recordings 
 
 
-%% Parameters
+%% Default parameters
 
 % Name of data files
 fName = 'pixel_data.mat';
 
 % High-pass cut-off frequency (Hz)
-cut_high = .3;
+p.cut_high = .3;
 
 % Tolerance for smoothing spline
-tol = 1;
+p.tolM = 1;
+p.tolP = 1;
 
 % Duration for box-car analysis (s)
-anaDur = 10;
+p.anaDur = 15;
+
+% Step through analysis
+stepThrough = 1;
+
+% Whether to invert pixel intensity values
+p.invert = 'no';
 
 
 %% Get path of data file, load data
 
 if nargin < 1
     pName = uigetdir(fName,'Select directory with pike and marlin');
+    if pName==0
+        return
+    end
+end
+
+%% Prompt about running
+
+a  = dir([pName filesep 'interval_data.mat']);
+a2 = dir([pName filesep 'include_in_pool.mat']);
+a3 = dir([pName filesep 'exclude_from_pool.mat']);
+
+if ~isempty(a)
+    
+    if ~isempty(a2)
+        disp(' ')
+        disp(['Sequence approved (file include_in_pool.mat exists), '...
+            'visualizing results . . .'])
+        
+    elseif ~isempty(a2)
+        disp(['Sequence rejected (file exclude_from_pool.mat exists), '...
+            'visualizing results . . .'])
+        
+    else
+        
+        but = questdlg('Data exist','Warning!',...
+            'Overwrite all','Keep interval',...
+            'Just visualize','Overwrite all');
+        
+        if isempty(but)
+            return
+            
+        elseif strcmp(but,'Overwrite all')
+            delete([pName filesep 'comparison_data.mat'])
+            delete([pName filesep 'interval_data.mat'])
+            
+            a = dir([pName filesep 'ana_params.mat']);
+            if ~isempty(a)
+                delete([pName filesep 'ana_params.mat'])
+            end
+            
+            a = dir([pName filesep 'comparison_data.mat']);
+            if ~isempty(a)
+                delete([pName filesep 'comparison_data.mat'])
+            end
+            
+        elseif strcmp(but,'Keep interval')
+            delete([pName filesep 'comparison_data'])
+            delete([pName filesep 'ana_params.mat'])
+            
+        elseif strcmp(a,'Just visualize')
+            % Do nothing
+            
+        end
+        
+    end
 end
 
 
@@ -58,8 +120,8 @@ a = dir([pName filesep 'interval_data.mat']);
 if isempty(a)
     
     % High-pass filter pixel data
-    dMf = butter_filt(dM,frameRate,cut_high,'high');
-    dPf = butter_filt(dP,frameRate,cut_high,'high');
+    dMf = butter_filt(dM,frameRate,p.cut_high,'high');
+    dPf = butter_filt(dP,frameRate,p.cut_high,'high');
     
     % Normalize
     dMf = (dMf-mean(dMf))./std(dMf);
@@ -168,6 +230,15 @@ clear a
 
 %% Trim, filter & normalize data
 
+% Load parameter file, if one exists
+a2 = dir([pName filesep 'ana_params.mat']);
+
+if ~isempty(a2)
+    % Load 'p' structure
+    load([pName filesep 'ana_params.mat'])
+    
+end
+
 % Find indx for interval
 idx = (t>=tStart) & (t<=tEnd);
 
@@ -177,15 +248,25 @@ tf = tf-tf(1);
 dMf = dM(idx);
 dPf = dP(idx);
 
-% High-pass filter 
-dMf = butter_filt(dMf,frameRate,cut_high,'high');
-dPf = butter_filt(dPf,frameRate,cut_high,'high');
+p.cut_high=.1;
 
-% Normalize
+% High-pass filter 
+dMf = butter_filt(dMf,frameRate,p.cut_high,'high');
+dPf = butter_filt(dPf,frameRate,p.cut_high,'high');
+
+if 0
+    figure;
+    subplot(2,1,1)
+        h = plot(tf,dM(idx)-mean(dM(idx)),'r',tf,dMf,'r');
+        set(h(2),'LineWidth',1.5)
+    subplot(2,1,2)
+        plot(tf,dP(idx)-mean(dP(idx)),'b',tf,dPf,'b');
+        set(h(2),'LineWidth',1.5)
+end
+
+% Normalize filtered
 dMf = (dMf-mean(dMf))./std(dMf);
 dPf = (dPf-mean(dPf))./std(dPf);
-
-clear idx
 
 
 %% Step through data for analysis
@@ -198,86 +279,267 @@ if isempty(a)
     [f,r.pwrP] = fft_data(dPf,frameRate);
     [r.f,r.pwrM] = fft_data(dMf,frameRate);
     
+    % Load parameter file, if one exists
+    a2 = dir([pName filesep 'ana_params.mat']);
+    if isempty(a2)
+        stepThrough = 1;
+        
+    else
+        % Load 'p' structure
+        load([pName filesep 'ana_params.mat'])
+        
+    end
+    
+    if stepThrough
+        figure
+    end
+    
     % Define index vector, initiate variables
-    intrvl = floor(tf./anaDur)+1;
     i = 1;
+    dspM = [];
+    dspP = [];
     
     % Step through timeseries
     while 1
         
-        % Break when completed all intervals
-        if i > max(intrvl)
-            break
+        % Loop that checks interval duration
+        while 1
+            % Define interval
+            intrvl = floor(tf./p.anaDur)+1;
+            
+            % Break when completed all intervals
+            if i > max(intrvl)-1
+                break
+            end
+            
+            % Pixel values for current interval
+            cM = dMf(intrvl==i);
+            cP = dPf(intrvl==i);
+            cT = tf(intrvl==i);
+            
+            % Invert, if requested
+            if strcmp(p.invert,'pike')
+                cP = -cP;
+            elseif strcmp(p.invert,'marlin')
+                cM = -cM;
+            end
+                
+            
+            % Smoothing spline fit to data
+            spM = spaps(cT,cM,p.tolM);
+            spP = spaps(cT,cP,p.tolP);
+            
+            % Find zeros of splines (s)
+            zM = fnzeros(spM)';
+            zP = fnzeros(spP)';
+            
+            % Choose only zeros on leading edge of wave
+            zMn = [];
+            zPn = [];
+            
+            for j = 1:length(zM)
+                if fnval(fnder(spM),zM(j))>0
+                    zMn = [zMn; zM(j)];
+                end
+            end
+            
+            for j = 1:length(zP)
+                if fnval(fnder(spP),zP(j))>0
+                    zPn = [zPn; zP(j)];
+                end
+            end
+            
+            zM = zMn;
+            zP = zPn;
+            
+            clear zMn zPn
+            
+            % Check result
+            if  length(zM)>1 && length(zP)>1 
+                break
+                
+            else
+                disp(' ')
+                beep
+                disp(['Fewer than 2 peaks in interval! Increasing '...
+                      'duration from ' num2str(p.anaDur) 's to ' ...
+                      num2str(1.5*p.anaDur) 's'])
+                disp(' ')
+                
+                p.anaDur = 1.5*p.anaDur;
+                
+                if p.anaDur > tf
+                    error('Interval exceeds total duration')
+                end
+            end
+
         end
         
-        % Pixel values for current interval
-        cM = dMf(intrvl==i);
-        cP = dPf(intrvl==i);
-        cT = tf(intrvl==i);
+        % Break when completed all intervals
+        if i > max(intrvl)-1
+            break
+        end
         
         % Find delay (s)
         r.delay(i) = (length(cP) - find(xcorr(cM,cP)==max(xcorr(cM,cP))))/...
             frameRate;
         r.t_delay(i) = mean(cT);
-        
-        % Smoothing spline fit to data
-        spM = spaps(cT,cM,tol);
-        spP = spaps(cT,cP,tol);
-        
-        % Find zeros of splines (s)
-        zM = fnzeros(spM)';
-        zP = fnzeros(spP)';
-        
+            
         % Find mean period of openings (s)
-        r.periodM(i) = 2*mean(diff(zM(:,1)));
-        r.periodP(i) = 2*mean(diff(zP(:,1)));
+        r.periodM(i) = mean(diff(zM(:,1)));
+        r.periodP(i) = mean(diff(zP(:,1)));
         
-        % Visualize correction from delay
-        if 0
-            subplot(3,1,1)
-            plot(cT,cM,'r.',cT,cP,'b.');
+        % Evaluate splines for comparison with data
+        dspM = [dspM; fnval(spM,cT)];
+        dspP = [dspP; fnval(spP,cT)];
+        
+        % Set constants for inversion
+        if strcmp(p.invert,'marlin')
+            M_in = -1;
+            P_in = 1;
+        elseif strcmp(p.invert,'pike')
+            P_in = -1;
+            M_in = 1;
+        else
+            M_in = 1;
+            P_in = 1;
+        end
+        
+        
+        % Visualize
+        if stepThrough
+            
+            subplot(7,1,1)
+            plot(tf,M_in.*dMf,'r',tf,P_in.*dPf,'b');
             hold on
-            fnplt(spM,'r')
-            fnplt(spP,'b')
-            grid on
+            yL = ylim;
+            h = fill([min(cT) max(cT) max(cT) min(cT)],...
+                [yL(1) yL(1) yL(2) yL(2)],[.5 .5 .5]);
+            set(h,'EdgeColor','none')
+            set(h,'FaceAlpha',.3)
+            clear h
             hold off
             
-            subplot(3,1,2)
+            subplot(7,1,2:3)
+            h = plot(cT,cM,'r-');
+            hold on
+            h = plot(cT,fnval(spM,cT),'r-');
+            set(h,'LineWidth',1.5)
+            for j = 1:length(zM)
+                plot([zM(j) zM(j)],ylim,'k-')
+            end
+            plot(xlim,[0 0],'k--')
+            hold off
+            title('Interval')
+            xlabel('time (s)')
+            ylabel('Normalized pixel intensity')
+            legend('Marlin data','spline fit','zero cross')
+            
+            subplot(7,1,4:5)
+            h = plot(cT,cP,'b-');
+            hold on
+            h = plot(cT,fnval(spP,cT),'b-');
+            set(h,'LineWidth',1.5)
+            for j = 1:length(zP)
+                plot([zP(j) zP(j)],ylim,'k-')
+            end
+            plot(xlim,[0 0],'k--')
+            hold off
+            title('Interval')
+            xlabel('time (s)')
+            ylabel('Normalized pixel intensity')
+            legend('Pike Data','spline fit','zero cross')
+            
+            subplot(7,1,6:7)
             plot(cT,cM,'r',cT-r.delay(i),cP,'b-');
-            title('with delay correction:')
+            xlabel('time (s)')
+            ylabel('Normalized pixel intensity')
+            title('Measurements with delay correction:')
             grid on
             
-            subplot(3,1,3)
-            fnplt(fnder(spM,1),'r')
-            hold on
-            fnplt(fnder(spP,1),'b')
-            hold off
-            grid on
+            but = questdlg('How do the data look ?','',...
+                     'Advance interval','Change parameter values',...
+                     'Great, skip to end','Advance interval');
+                 
+            if isempty(but)
+                return
+                
+            elseif strcmp(but,'Change parameter values')
+                
+                % Prompt for parameter values
+                prompt = {'Interrogation interval (s)',...
+                    'Marlin smoothing tolerance (larger = smoother)',...
+                    'Pike smoothing tolerance (larger = smoother)',...
+                    'Invert? ("no","pike","marlin")'};
+                
+                answer = inputdlg(prompt,'Parameters',1,...
+                         {num2str(p.anaDur),...
+                          num2str(p.tolM),num2str(p.tolP),p.invert});
+                
+                p.anaDur = str2num(answer{1});
+                p.tolM = str2num(answer{2});
+                p.tolP = str2num(answer{3});
+                
+                % Check/set invert input
+                if ~strcmp(answer{4},'no') && ~strcmp(answer{4},'pike')...
+                        && ~strcmp(answer{4},'marlin')
+                    warning('invalid entry for "invert", setting to "no"')
+                    p.invert = 'no';
+                else
+                    p.invert = answer{4};
+                end
+                
+                % Rerun current frame
+                i = i-1;
+                
+                clear prompt answer
             
+            elseif strcmp(but,'Great, skip to end') 
+                stepThrough = 0;
+                
+            end
+            
+            clear but 
         end
         
         i = i+1;
         
         clear zM zP cM cP cTspM spP
-    end
+    end 
     
-    % Save r
+    % Save r & p
     save([pName filesep 'comparison_data'],'r')
+    save([pName filesep 'ana_params.mat'],'p')
     
-    clear r i intrvl a
+    clear r i intrvl a p
 end
 
 
-%% Display data
+%% Display data 
 
 % Load 'r' vector
 load([pName filesep 'comparison_data.mat'])
 
+% Load 'p' vector
+load([pName filesep 'ana_params.mat'])
+
 numPanels = 6;
+
+% Set constants for inversion
+if strcmp(p.invert,'marlin')
+    M_in = -1;
+    P_in = 1;   
+elseif strcmp(p.invert,'pike')
+    P_in = -1;
+    M_in = 1;    
+else
+    M_in = 1;
+    P_in = 1;
+end
 
 figure
 subplot(numPanels,1,1)
-    plot(t-tStart,dM,'r',t-tStart,dP,'b');
+    plot(t-tStart,M_in.*dM,'r',t-tStart,P_in.*dP,'b');
     hold on
     
     yL = ylim;
@@ -294,10 +556,10 @@ subplot(numPanels,1,1)
     grid on
 
 subplot(numPanels,1,2)
-    plot(tf,dMf,'r')
+    plot(tf,M_in.*dMf,'r')
     hold on
 
-    plot(tf,dPf,'b')
+    plot(tf,P_in.*dPf,'b')
 
     xlabel('time (s)')
     ylabel('Filtered pix val')
@@ -327,6 +589,42 @@ subplot(numPanels,1,5:6)
     xlim([0 2])
 
     
+%% Prompt for revision
+
+a2 = dir([pName filesep 'include_in_pool.mat']);
+a3 = dir([pName filesep 'exclude_from_pool.mat']);
+
+if isempty(a2) || isempty(a3)
+    
+    but = questdlg('How do the data look ?','',...
+        'Great!','Re-run analysis',...
+        'Poor -- do not include','Great!');
+    
+    if isempty(but)
+        return
+        
+    elseif strcmp(but,'Great!')
+        include_in_pool = 1;
+        save([pName filesep 'include_in_pool.mat'],'include_in_pool');
+        
+    elseif strcmp(but,'Re-run analysis')
+        close
+        %     delete([pName filesep 'comparison_data'])
+        %     delete([pName filesep 'ana_params.mat'])
+        %     delete([pName filesep 'interval_data.mat'])
+        compare_spir(pName);
+        
+    elseif strcmp(but,'Poor -- do not include')
+        include_in_pool = 0;
+        save([pName filesep 'exclude_from_pool.mat'],'include_in_pool');
+        
+    end
+    
+    clear but
+    
+end
+
+
 
 function data_filtered = butter_filt(data,sample_rate,cut_freq,type) 
 % High-pass or low-pass butterworth filter
