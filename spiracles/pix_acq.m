@@ -1,4 +1,4 @@
-function pix_acq(fName,pName,frRate)
+function pix_acq(fName,pName,frRate,d)
 % Acquires pixel intensity for a circular region of interest
 %
 % fName - filename of first file in image sequence
@@ -21,6 +21,9 @@ numDigits = 4;
 
 % Show the acquisition
 visSteps = 0;
+
+% Text update on frames
+echoOn = 0;
 
 % Window size for x-correlation analysis
 winSize = 256;
@@ -67,55 +70,88 @@ d.numDigits = numDigits;
 clear frameRate
 
 
-%% Interactively define roi
+%% Define roi
 
-% Show first frame in figure window
-f = figure;
+% Load first frame
 I = imread([pName filesep a(1).name]);
-imshow(I)
-hold on
 
-% Select center point
-title('Choose center point')
-[xStart,yStart] = ginput(1);
-
-% Store center for first frame
-d.xCntr = xStart;
-d.yCntr = yStart;
-
-% Plot center
-plot(d.xCntr,d.yCntr,'r+')
-
-% Define unit circle
-theta = linspace(0,2*pi,numRoiPts);
-d.xC = cos(theta);
-d.yC = sin(theta);
-
-% Select circular roi
-title('Choose radius')
-[xT,yT] = ginput(1);
-d.r = ((d.xCntr-xT)^2 + (d.yCntr-yT)^2)^0.5;
-xROI = d.r.*d.xC + d.xCntr;
-yROI = d.r.*d.yC + d.yCntr;
-
-% Binary at roi
-roiI0 = roipoly(I,xROI,yROI);
-
-% Show selected roi
-plot(xROI,yROI,'r-')
-pause(0.5)
-close
-
-
-clear theta
+% Done interactively, if no 'd' given
+if nargin < 4
+    % Show first frame in figure window
+    f = figure;
+    imshow(I)
+    hold on
+    
+    % Select center point
+    title('Choose center point')
+    [xStart,yStart] = ginput(1);
+    
+    % Store center for first frame
+    d.xCntr = xStart;
+    d.yCntr = yStart;
+    
+    % Plot center
+    plot(d.xCntr,d.yCntr,'r+')
+    
+    % Define unit circle
+    theta = linspace(0,2*pi,numRoiPts);
+    d.xC = cos(theta);
+    d.yC = sin(theta);
+    
+    % Select circular roi
+    title('Choose radius')
+    [xT,yT] = ginput(1);
+    d.r = ((d.xCntr-xT)^2 + (d.yCntr-yT)^2)^0.5;
+    xROI = d.r.*d.xC + d.xCntr;
+    yROI = d.r.*d.yC + d.yCntr;
+    
+    % Binary at roi
+    roiI0 = roipoly(I,xROI,yROI);
+    
+    % Show selected roi
+    plot(xROI,yROI,'r-')
+    pause(0.5)
+    close
+    
+    clear theta
+    
+% Extract from 'd', if given and roiX field exists
+elseif isfield(d,'roiX')
+    % Calculate roi parameters from coordinates
+    xStart = mean(d.roiX);
+    yStart = mean(d.roiY);
+    d.r = range(d.roiX);
+    
+    % Store center for first frame
+    d.xCntr = xStart;
+    d.yCntr = yStart;
+    
+    % Define unit circle
+    theta = linspace(0,2*pi,numRoiPts);
+    d.xC = cos(theta);
+    d.yC = sin(theta);
+    
+    xROI = d.roiX;
+    yROI = d.roiY;
+    
+    % Binary at roi
+    roiI0 = roipoly(I,xROI,yROI);
+    
+% Otherwise, fields should already exist
+else
+    xStart = d.xCntr(1);
+    yStart = d.yCntr(1);
+    
+    % Define roi coordinates
+    xROI = d.r.*d.xC + d.xCntr(1);
+    yROI = d.r.*d.yC + d.yCntr(1);
+    
+    % Define roi binary
+    roiI0 = roipoly(I,xROI,yROI);
+end
 
 
 %% Load initial image
-
-% % Define unit circle
-% theta = linspace(0,2*pi,numRoiPts);
-% xCirc = cos(theta);
-% yCirc = sin(theta);
 
 % Current frame number
 frNum = ['0001'];
@@ -123,11 +159,6 @@ frName = [nameHeader frNum((end-numDigits+1):end) '.' sfx];
 I0 = imread([pName filesep frName]);
 
 % Interrogation window
-% winI0 = I0(floor(d.yCntr(1)-winSize/2):floor(d.yCntr(1)+winSize/2),...
-%              floor(d.xCntr(1)-winSize/2):floor(d.xCntr(1)+winSize/2));
-
-%winSize = min([size(I0,1) size(I0,2)]);
-
 winI0 = I0(ceil(size(I0,1)/2-winSize/2+1):floor(size(I0,1)/2+winSize/2-1),...
            ceil(size(I0,2)/2-winSize/2+1):floor(size(I0,2)/2+winSize/2-1));
          
@@ -166,9 +197,6 @@ if isempty(a)
         winI = I(ceil(size(I0,1)/2-winSize/2+1):floor(size(I0,1)/2+winSize/2-1),...
             ceil(size(I0,2)/2-winSize/2+1):floor(size(I0,2)/2+winSize/2-1));
         
-        % Find offset from image window pair
-        %[xOffset,yOffset,totOffset] = findOffset(winI,winI0);
-        
         % Correlation coefficient for interrogation windows
         cc = normxcorr2(winI,winI0);
         
@@ -197,12 +225,17 @@ if isempty(a)
         roiI = roipoly(I,xROI,yROI);
         
         % Update status
-        disp(['Done frame ' num2str(i) ' of ' num2str(numFrames)])      
+        if echoOn
+            disp(['Done frame ' num2str(i) ' of ' num2str(numFrames)])      
+        end
         
+        % Reset reference image and center point, if displacement large
         if (totOffset > maxDisp) 
-   
-            % Reset reference image and center point
-            disp('Resetting reference . . .')
+            
+            if echoOn
+                disp('Resetting reference . . .')
+            end
+            
             xStart = d.xCntr(i);
             yStart = d.yCntr(i);
             I0 = I;
@@ -258,8 +291,11 @@ if isempty(a)
     
 else
     
-    disp(' ')
-    disp('Loading previous roi data file . . .')
+    if echoOn
+        disp(' ')
+        disp('Loading previous roi data file . . .')
+    end
+    
     load([pName filesep 'roi_data'])
     
 end
@@ -330,7 +366,8 @@ for i = 1:length(d.frames)
         
         pause(.1)
         
-    else
+    elseif echoOn
+
         disp(['Measuring pixel intensity: done frame ' ...
               num2str(d.frames(i)) ' of ' num2str(d.frames(end))])
     end
@@ -344,20 +381,11 @@ for i = 1:length(d.frames)
     clear I frName frNum winI xOffset yOffset
 end
 
-% if ~visSteps
-%     figure
-% end
-
-% Plot data
-% plot(d.frameNum./d.frameRate,d.pixVal)
-% xlabel('Time (s)')
-% ylabel('Mean pixel intensity')
-
-% Save data
-%[sFileName,sFilePath]= uiputfile('pixdata.mat','Save data');
-%save([sFilePath filesep sFileName],'d');
 
 save([pName filesep 'pixel_data'],'d')
+
+
+
 
 
 
