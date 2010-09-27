@@ -11,6 +11,9 @@ nameHead = 'Day';
 % Extension for image files
 nameSuffix = 'TIF';
 
+% Number of digits for frame number in filename
+num_digit = 5;
+
 % Visualize acquisition
 visSteps = 1;
 
@@ -19,9 +22,6 @@ maxFrames = 1000;
 
 % Whether to invert the image
 invert = 1;
-
-% Number of digits for frame number in filename
-num_digit = 5;
 
 
 %% Get path of data file, load data
@@ -256,9 +256,84 @@ end
 clear img
 
 
-%% Step through frames 
+%% Step through frames for position of predator
+
+a3 = dir([vPath filesep 'pred_coords.mat']);
+
+if isempty(a3)
+    
+    if visSteps
+        f = figure;
+        set(f,'DoubleBuffer','on')
+    end
+    
+    % Loop through frames
+    for i = 1:length(p.frNums)
+        
+        % Define roi coordinates
+        [x_roi,y_roi] = roiCoords(p);
+        
+        % Grab frame, threshold image & choose roi
+        img = grabFrame(vPath,p.filename{i},invert,x_roi,y_roi);
+        imROI   = roipoly(img,x_roi,y_roi);
+        imBW    = ~im2bw(img,p.tVal);
+        imBW    = imBW & imROI;
+        clear img
+        
+        % Get peripheral shapes
+        [B,L] = bwboundaries(imBW,'noholes');
+        
+        % Select blob with greatest periphery
+        maxB = 0;
+        idx = [];
+        for j = 1:length(B)
+            if length(B{j}) > maxB
+                maxB = length(B{j});
+                perim = B{j};
+                idx = j;
+            end
+        end
+        
+        % Store away data
+        pd.frame(i) = p.frNums(i);
+        pd.filename{i} = p.filename{i};
+        pd.xPerim{i} = perim(:,1);
+        pd.yPerim{i} = perim(:,2);
+        
+        % Visualize frames
+        if visSteps
+            im = imread([vPath filesep p.filename{i}]);
+            figure(f)
+            warning off
+            imshow(im)
+            hold on
+            plot(pd.yPerim{end},pd.xPerim{end},'r-')
+            title(['Frame ' num2str(p.frNums(i)) ' of ' ...
+                num2str(p.frNums(end))])
+            hold off
+            pause(.2)
+            warning on
+            clear im
+        end
+        
+        % Clear variables for next loop
+        clear img imBW imBW2 props imROI se x_roi y_roi maxB
+    end
+    
+    % Save data
+    save([vPath filesep 'pred_coords'],'pd')
+    
+else
+    
+    % Load 'pd' structure of predator coordinates
+    disp(' '); disp('Loading predator data . . .')
+    load([vPath filesep 'pred_coords.mat'])
+    
+end
 
 
+%TODO: postprocessing on predator to determine head
+%TODO: Acquire prey position
 
 
 
