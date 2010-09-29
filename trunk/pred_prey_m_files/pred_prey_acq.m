@@ -15,7 +15,7 @@ nameSuffix = 'TIF';
 num_digit = 5;
 
 % Visualize acquisition
-visSteps = 1;
+visSteps = 0;
 
 % Max number of frames for creating the mean image
 maxFrames = 1000;
@@ -217,7 +217,7 @@ else
 end
 
 
-%% Select threshold
+%% Select thresholds
 
 % Look for mean image
 a2 = dir([vPath filesep 'seq_params.mat']);
@@ -250,6 +250,7 @@ else % if seq_param exists, load
 
     disp(' '); disp('Loading existing sequence parameters . . .'); 
     load([vPath filesep 'seq_params.mat'])
+    disp(' ');
 
 end
 
@@ -314,6 +315,9 @@ if isempty(a3)
             pause(.2)
             warning on
             clear im
+        else
+            disp(['Predator acquire: Frame ' num2str(p.frNums(i)) ' of ' ...
+                num2str(p.frNums(end))]);
         end
         
         % Clear variables for next loop
@@ -326,10 +330,14 @@ if isempty(a3)
 else
     
     % Load 'pd' structure of predator coordinates
-    disp(' '); disp('Loading predator data . . .')
+    disp('Loading predator data . . .')
     load([vPath filesep 'pred_coords.mat'])
     
 end
+
+
+%% Acquire position of prey
+
 
 
 %TODO: postprocessing on predator to determine head
