@@ -4,6 +4,20 @@ function point_analyze(imPath)
 
 
 
+visSteps = 0;
+
+% Smoothing 
+d.tolAng = 7e-5;
+
+
+d.tolPos = 2e-1;
+
+% Dynamic viscosity (Pa s)
+mu = 1e-3;
+
+% Density (kg m^-3)
+rho = 1024;
+
 
 %% Define directories
 
@@ -32,7 +46,32 @@ frames = 1:length(pl.ptX);
 nonan = ~isnan(pl.ptX);
 
 % Time vector
-time = 0:1/seq.frame_rate:seq.numFrames/seq.frame_rate;
+time = 0:(1/seq.frame_rate):(seq.numFrames/seq.frame_rate);
+
+
+%% Run calibration, if none exists
+
+a = dir([imPath filesep 'cal_const.mat']);
+
+if isempty(a)
+    % Browse
+    [cal_file,cal_path,tmp] = uigetfile('*.tif','Pick calibration image');
+    
+    if tmp==0
+        return
+    end
+    
+    imCal    = imread([cal_path filesep cal_file]);
+    calconst = calibrate(imCal);
+    
+    save([imPath filesep 'cal_const.mat'],'calconst')
+    
+else
+    % Load calconst
+    load([imPath filesep 'cal_const.mat'])
+    
+end
+
 
 
 %% Define appendage angle wrt body coordinates
@@ -40,8 +79,16 @@ time = 0:1/seq.frame_rate:seq.numFrames/seq.frame_rate;
 % Loop index
 idx = 1;
 
+bLength = mean(sqrt((body.headX(nonan)-body.tailX(nonan)).^2 + ...
+    (body.headY(nonan)-body.tailY(nonan)).^2));
+
+if visSteps
+    f = figure;
+   set(f,'DoubleBuffer','on');
+end
+
 % Step trhough frames
-for i = frames(nonnan)
+for i = frames(nonan)
     
     % Check inputs
     if isnan(body.headX(i)) || isnan(body.tailX(i))
@@ -49,6 +96,7 @@ for i = frames(nonnan)
                ' you collect point data.'])
     end
     
+
     % Origin at body center
     origin = [mean([body.headX(i) body.tailX(i)]) ...
               mean([body.headY(i) body.tailY(i)])];
@@ -61,8 +109,15 @@ for i = frames(nonnan)
     pts   = [pl(1).ptX(i) pl(1).ptY(i)];
     [x,y] = globalToLocal(pts,origin,S);
     
+    if visSteps
+        plot([0 x]./bLength,[0 y]./bLength,'o-')
+        axis square
+        axis([-1 1 -1.5 0.5])
+        pause(.2)
+    end
+    
     % Calculate appendage angle
-    angl(idx) = atan2(y,x);
+    d.angl(idx) = atan2(y,x);
     
     % Step index
     idx = idx + 1;
@@ -71,11 +126,151 @@ for i = frames(nonnan)
 end
 
 
-%% Calculate speeds
+%% Calculate body position
+
+d.t = time(nonan);
+
+% Calculate body center
+cntrX = mean([body.headX(nonan) body.tailX(nonan)],2);
+cntrY = mean([body.headY(nonan) body.tailY(nonan)],2);
+
+% Body position
+d.body_pos = [0; cumsum(sqrt(diff(cntrX).^2 + diff(cntrY).^2))];
+
+
+%% Smooth splines & speed
+
+d.spPos = spaps(d.t,d.body_pos,d.tolPos);
+d.spAng = spaps(d.t,d.angl,d.tolAng);
+
+d.Ubody = fnval(fnder(d.spPos),d.t);
+d.Uang  = fnval(fnder(d.spAng),d.t);
+
+d.Abody = fnval(fnder(d.spPos,2),d.t);
+d.Aang  = fnval(fnder(d.spAng,2),d.t);
 
 
 
-%Dbody = 
+d.bLength = bLength.*calconst;
+
+clear bLength
+
+d.Re_body = (d.bLength/1000) .* max(d.Ubody.*calconst)./1000 .* rho ./ mu;
+
+
+% Normalize
+d.Ubody = d.Ubody./range(d.Ubody);
+d.Uang = d.Uang./range(d.Uang);
+
+% Normalize
+d.Abody = d.Abody./range(d.Abody);
+d.Aang  = d.Aang./range(d.Aang);
+
+
+ 
+
+%% Visualize data
+
+figure
+
+subplot(4,1,1)
+plot(d.t,180.*d.angl./pi,'k.',d.t,180.*fnval(d.spAng,d.t)./pi,'k-')
+xlabel('time (s)')
+ylabel('Angle (deg)')
+grid on
+title(['bLength = ' num2str(d.bLength) '  Re = ' num2str(d.Re_body)])
+
+subplot(4,1,2)
+plot(d.t,d.body_pos.*calconst,'r.',d.t,fnval(d.spPos,d.t).*calconst,'r-')
+xlabel('time (s)')
+ylabel('Body position (SI Units)')
+grid on
+
+subplot(4,1,3)
+plot(d.t,d.Ubody,'r-',d.t,d.Uang,'k-')
+xlabel('time (s)')
+ylabel('Normlized velocity')
+grid on
+
+subplot(4,1,4)
+plot(d.t,d.Abody,'r-',d.t,d.Aang,'k-')
+xlabel('time (s)')
+ylabel('Normlized acceleration')
+grid on
+
+
+
+%% Interactively pick landmarks
+
+
+disp('Pick off start of power stroke (low angle)')
+[t1,y1] = ginput(1);
+
+if isempty(t1)
+    return
+end
+
+d.t_stroke_start = t1;
+
+clear t1 y1
+
+
+disp('Pick off end of power stroke (high angle)')
+[t1,y1] = ginput(1);
+
+if isempty(t1)
+    return
+end
+
+d.t_stroke_end = t1;
+
+clear t1 y1
+
+
+disp('Pick off corresponding peak appendage accel (high value)')
+[t1,y1] = ginput(1);
+
+if isempty(t1)
+    return
+end
+
+d.t_peak_accel = t1;
+
+clear t1 y1
+
+
+disp('Pick off corresponding peak appendage velocity (high value)')
+[t1,y1] = ginput(1);
+
+if isempty(t1)
+    return
+end
+
+d.t_peak_vel = t1;
+
+clear t1 y1
+
+
+disp('Pick off corresponding peak body accel (high value)')
+[t1,y1] = ginput(1);
+
+if isempty(t1)
+    return
+end
+
+d.t_peak_BodyAccel = t1;
+
+clear t1 y1
+
+
+
+%% Save data
+
+save([imPath filesep 'processed_data.mat'],'d')
+
+
+
+
 
 
 
@@ -84,16 +279,20 @@ end
 function S = localSystem(P1,P2)
 % Defines a transformation vector for a local coordinate system in an
 % inertial frame of reference.  Uses P1 as the origin and P2 to find the
-% direction of the y-axis.  Coordinates must be (1x2) vectors.
+% direction of the x-axis.  Coordinates must be (1x2) vectors.
 
 if size(P1,1)~=1 || size(P1,2)~=2 ||...
    size(P2,1)~=1 || size(P2,2)~=2
     error('Coordinates must be (1x2) vectors');
 end
 
-yAxis       = (P2-P1)./norm(P2-P1);
-xAxis       = [yAxis(2); -yAxis(1)];
-S           = [xAxis yAxis'];
+% yAxis       = (P2-P1)./norm(P2-P1);
+% xAxis       = [yAxis(2); -yAxis(1)];
+% S           = [xAxis yAxis'];
+
+xAxis       = (P2-P1)./norm(P2-P1);
+yAxis       = [xAxis(2);-xAxis(1)];
+S           = [xAxis' yAxis];
 
 
 function [x,y] = localToGlobal(pts,origin,S)
