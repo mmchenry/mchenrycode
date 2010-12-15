@@ -1,47 +1,89 @@
-function point_pool(dPathh)
+function point_pool(dPath)
+
+
+%% Select path
 
 if nargin<1
-    dPathh = uigetdir(pwd,'select Ddirectory that contains data directories');
-    if dPathh==0
+    dPath = uigetdir(pwd,'select Directory that contains data directories');
+    if dPath==0
         return
     end
 end
 
-a = dir(dPathh);
 
-idx = 1;
+%% Pool together all sequences that have been completely analyzed
 
-for i = 3:length(a)
-    if a(i).isdir
-        
-        a2 = dir([dPathh filesep a(i).name filesep 'processed_data.mat']);
-        
-        if ~isempty(a2)
+tmp = dir([dPath filesep 'pooled_data.mat']);
+
+if isempty(tmp)
+    
+    a = dir(dPath);
+    
+    idx = 1;
+    
+    for i = 3:length(a)
+        if a(i).isdir
             
-            load([dPathh filesep a(i).name filesep 'processed_data.mat']);
+            % Check for data files
+            % Look for "seq"
+            tmp1 = dir([dPath filesep a(i).name filesep 'seq_info.mat']);
             
-            %load([dPathh filesep a(i).name filesep 'cal_const.mat'])
-            %calconst
+            % Look for "body"
+            tmp2 = dir([dPath filesep a(i).name filesep 'body_data.mat']);
             
-            str_period = d.t_stroke_end - d.t_stroke_start;
+            % Look for "pl"
+            tmp3 = dir([dPath filesep a(i).name filesep 'appendage_data.mat']);
+                        
+            % Look for "calconst"
+            tmp4 = dir([dPath filesep a(i).name filesep 'cal_const.mat']);
             
-            Res(idx) = d.Re_body;
-            
-            Bs(idx) = d.bLength;
-            
-            ph_delay(idx) = (d.t_peak_vel - d.t_peak_BodyAccel)/str_period;
-            
-            idx = idx + 1;
-            
+            % Issue warnings, if data files not present
+            if isempty(tmp1)
+                warning([dPath filesep a(i).name filesep ...
+                          'seq_info.mat does not exist'])
+                
+            elseif isempty(tmp2)
+                warning([dPath filesep a(i).name filesep ...
+                           'body_data.mat does not exist'])
+                
+            elseif isempty(tmp3)
+                warning([dPath filesep a(i).name filesep ...
+                           'appendage_data.mat does not exist'])
+                       
+           elseif isempty(tmp4)
+                warning([dPath filesep a(i).name filesep ...
+                           'cal_const.mat does not exist'])
+                
+                % Otherwise . . .
+            else
+                
+                % Get the 'd' structure
+                d(idx) = point_analyze([dPath filesep a(i).name],0);
+                idx = idx + 1;
+                
+            end
         end
-        
     end
     
+    % Save data
+    save([dPath filesep 'pooled_data'],'d')
+    
+else
+    
+    % Loading pooled data
+    disp('Loading pooled_data . . .')
+    load([dPath filesep 'pooled_data'])
+    disp(' ')
     
 end
 
 
+%% Find model parameters for each sequence
 
+
+
+
+return
 
 figure;
 subplot(1,2,1)
