@@ -130,11 +130,43 @@ else
     
     clear nanfill
     
+    % Overwrite nans with body points, if file present
+    if ~isempty(dir([vPath filesep 'body_data.mat']))
+        disp('Loading body_data.mat . . .')
+        disp('')
+        load([vPath filesep 'body_data.mat'])
+        
+        % Store previously acquired data
+        b.xNose = body.headX;
+        b.yNose = body.headY;
+        b.xTail = body.tailX;
+        b.yTail = body.tailY;
+        
+        clear body
+    end
+    
+    % Overwrite nans with appendage points, if file present
+    if ~isempty(dir([vPath filesep 'appendage_data.mat']))
+        disp('Loading appendage_data.mat . . .')
+        disp('')
+        load([vPath filesep 'appendage_data.mat'])
+        
+        % Store previously acquired data
+        b.xWrist  = pl(1).ptX;
+        b.yWrist  = pl(1).ptY;
+        
+        clear body
+    end
+    
     % Current point capture mode
     b.cMode = 'elbow';
      
     % Current frame index
-    b.cIdx = 1;
+    if min(isnan(b.xNose))==1
+        b.cIdx = 1;
+    else
+        b.cIdx = find(~isnan(b.xNose),1,'first');
+    end
 
 end
 
