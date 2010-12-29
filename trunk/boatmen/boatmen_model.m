@@ -11,48 +11,11 @@ function r = boatmen_model(pIn,Cd_app,Cd_body)
 % Body length (m) 
 L = pIn.body_len;
 
-% Initial body speed (m/s)
-U0 = pIn.initial_speed;
-
-% Angle of appendage at start of power stroke (rad)
-%gamma1  = pIn.ang_start;
-
-% Beat period (s)
-%P = pIn.beat_period;
-
 % Length of the paddle (m)
 pLen = pIn.app_len;
 
-% Amplitude of appendage speed (m/s)
-spd_A = pIn.spd_A;
-
-% Initial speed of power stroke (m/s)
-spd_0 = pIn.spd_0;
-
-% Phase of speed function (s)
-spd_phs   = pIn.spd_phs;
-
-% Period of speed function (s)
-spd_P     = pIn.spd_P;
-
-% Period of angle function (s)
-ang_P     = pIn.ang_P;
-
-% Amplitude of angle (rad)
-ang_amp   = pIn.ang_amp;
-
-% Start angle (rad)
-ang_start = pIn.ang_start;
-
-% Body mass (kg)
-%mass_body = 23e-6;
-mass_body = pIn.body_mass;
-
-% Period of the return stroke
-rtrn_P = pIn.rtrn_P;
-
 % Number of strokes
-num_strokes = pIn.num_strokes;
+%num_strokes = pIn.num_strokes;
 
 % Parameter defaults
 if nargin < 3  
@@ -66,6 +29,24 @@ if nargin < 3
     end
 end
 
+% Body mass (kg)
+mass_body = pIn.body_mass;
+
+% Paddle speed spline (m/s)
+sp_spd_pd = pIn.sp_spd_pd;
+
+% Paddle angle spline (rad)
+sp_ang_pd = pIn.sp_ang_pd;
+
+% Time interval of cycle (s)
+t_span = [pIn.t_events(1) pIn.t_events(3)];
+
+% Time when power stroke ends (s)
+t_end = pIn.t_events(2);
+
+% Initial body speed (m/s)
+U0 = pIn.U_initial;
+
 clear pIn
 
 
@@ -77,22 +58,17 @@ clear pIn
 % Water density (kg m^-3)
 rho_water = 1000;
 
-% Viscosity of water (Pa s)
-mu = 0.001;
-
 % Projected area of body (m^2) -- calculation assumes same shape as Blake
 S = pi*(0.2*L)^2;
-
-% Time to stop evaluation (s)
-%t_stop = 100e-3;
 
 % Initial body position (m)
 X0 = 0;
 
-
-
 % Height of appendage (m) -- calculation assumes same shape as Blake
 h = 0.23.*L;
+
+% Solver options
+options    = odeset('RelTol',1e-7);
 
 
 %% Scale parameters to non-dimensional units
@@ -106,144 +82,103 @@ sF = sM .* sL ./ sT^2;
 % Declare global variables
 %global p
 
-% Scale all parameters
-p.rho_water = rho_water   /sM *sL^3;
-%p.rho_body  = rho_body    /sM *sL^3;
-p.mass_body = mass_body   /sM;
-cp.mu        = mu          /(sF/sL^2) /sT;
-p.L         = L           /sL;
-%p.tspan     = [0 t_stop]  ./sT;
-p.U0        = U0          /sL *sT;
-p.X0        = X0          /sL;
-%p.gamma1    = gamma1;
-%p.P         = P           /sT;
-p.Cd_app    = Cd_app;
-p.Cd_body   = Cd_body;
-p.h         = h           /sL;
-p.pLen      = pLen        /sL;
-p.S         = S           /(sL^2);
-p.spd_A     = spd_A       /sL *sT;
-p.spd_phs   = spd_phs     /sT;
-p.spd_P     = spd_P       /sT;
-p.ang_P     = ang_P       /sT;
-p.spd_0     = spd_0       /sL *sT;
-p.ang_amp   = ang_amp;
-p.ang_start = ang_start;
-p.rtrn_P    = rtrn_P      /sT; 
-p.num_strokes = num_strokes;
+% Scaled parameters
+p.sL          = sL;
+p.sT          = sT;
+p.sM          = sM;
+p.sF          = sF;
+
+p.rho_water   = rho_water   /sM *sL^3;
+p.mass_body   = mass_body   /sM;
+
+p.L           = L           /sL;
+p.U0          = U0          /sL *sT;
+p.X0          = X0          /sL;
+p.Cd_app      = Cd_app;
+p.Cd_body     = Cd_body;
+
+p.h           = h           /sL;
+p.pLen        = pLen        /sL;
+p.S           = S           /(sL^2);
+p.t_span      = t_span ./sT;
+p.t_end       = t_end/sT;
+
+% Spline parameters (not scaled here)
+p.sp_spd_pd   = sp_spd_pd;
+p.sp_ang_pd   = sp_ang_pd;
+
 
 %clear mu L k t_stop rho_body rho_water S Cd_app Cd_body
-
-
-%% Calculated & solver parameters
-
-% Body volume (m^3)
-%p.vol_body = (4/3) * pi * (p.L/2)^3;
-
-% Solver options
-options    = odeset('RelTol',1e-7);
 
 
 %% Run numerical simulation 
 
 [t,X] = solver(p,options);
-%[t,X] = ode45(@gov_eqn,p.tspan,[p.X0; p.U0]);
 
 
 %% Store results (convert values back to SI units)
 
 
-% Appendage angle and speed 
-gama  = ang_func(t,p.ang_amp,p.spd_P,p.ang_start,p.spd_phs,p.rtrn_P);
-v_n   = spd_func(t,p.spd_A,p.spd_P,p.spd_phs,p.rtrn_P,p.spd_0);
+% TODO: Use the code below to calculate kinematics and trhust and drag
+% TODO: Visualize comparison btwn model and data
+
+% Calculate current paddle angle from spline
+gama = fnval(p.sp_ang_pd,t.*p.sT);
+
+% Calculate current paddle speed from spline
+s_idx      = (t <= p.t_end);
+v_n        = zeros(length(t),1);
+v_n(s_idx) = fnval(p.sp_spd_pd,t(s_idx).*p.sT) ./p.sL .*p.sT;
 
 % Thrust
-T = app_thrust(gama,v_n,p,X(:,2));
-D = body_drag(X(:,2),p);
+thrust = app_thrust(gama,v_n,p,X(:,2));
 
-%if strcmp(sim_mode,'default')
+% Drag
+drag = body_drag(X(:,2),p);
+
+% return a full set of result variables
+r.v_n    = v_n     .*sL ./sT;
+r.gamma  = gama;
+r.thrust = thrust  .*sF;
+r.drag   = drag    .*sF;
+r.t      = t       .*sT;
+r.x      = X(:,1)  .*sL;
+r.U      = X(:,2)  .*sL  ./sT;
+
+% Visualize results
+if 0
+    % Plot
+    figure;
+    subplot(3,1,1)
+    [ax,h1,h2] = plotyy(r.t.*1000,r.gamma,r.t.*1000,r.v_n.*1000);
+    ylabel(ax(1),'gamma (rad)')
+    ylabel(ax(2),'v_n (mm/s)')
+    grid on
     
-    % return a full set of result variables
-    r.v_n    = v_n     .*sL ./sT;
-    r.gamma  = gama;
-    r.thrust = T       .*sF;
-    r.drag   = D       .*sF;
-    r.t      = t       .*sT;
-    r.x      = X(:,1)  .*sL;
-    r.U      = X(:,2)  .*sL  ./sT;
+    subplot(3,1,2)
+    plot(r.t.*1000,r.thrust.*10^6,'g',r.t.*1000,r.drag.*10^6,'-')
+    legend('thrust','drag')
+    ylabel('Force (micro N)')
+    grid on
     
-%     % Report results    
-%     ReMax_body   = L .* max(abs(r.U)) .* rho_water ./ mu;
-%     ReMax_app    = max(abs(r.v_n)) .* pLen .* rho_water ./ mu;
-%     
-%     disp(' ')
-%     disp([' Maximum Re of the body = ' num2str(ReMax_body)]);
-%     disp(' ')
-%     disp([' Maximum Re of the appendage = ' num2str(ReMax_app)]);
-%     disp(' ')
-%     
-    % Visualize results
-    if 0
-        % Plot
-        figure;
-        subplot(3,1,1)
-        [ax,h1,h2] = plotyy(r.t.*1000,r.gamma,r.t.*1000,r.v_n.*1000);
-        ylabel(ax(1),'gamma (rad)')
-        ylabel(ax(2),'v_n (mm/s)')
-        grid on
-        
-        subplot(3,1,2)
-        plot(r.t.*1000,r.thrust.*10^6,'g',r.t.*1000,r.drag.*10^6,'-')
-        legend('thrust','drag')
-        ylabel('Force (micro N)')
-        grid on
-        
-        subplot(3,1,3)
-        plot(r.t.*1000,r.U.*1000,'-')
-        grid on
-        ylabel('U')
-        
-    end
+    subplot(3,1,3)
+    plot(r.t.*1000,r.U.*1000,'-')
+    grid on
+    ylabel('U')
     
-% elseif strcmp(sim_mode,'optimize')
-%     
-%     % Calculate speed and time in SI units
-%     U = X(:,2)  .*sL  ./sT;
-%     tU = t       .*sT;
-%     
-%     % Calculate mean speed after initial stroke
-%     idx = tU > (spd_P/2 + rtrn_P);
-%     
-%     r = mean(U(idx));
-%     
-% else
-%     
-%     error('Requested sim_mode not an option')
-%     
-% end
+end
 
 clear U t X T D
 
 
 
 
-% subplot(3,1,3)
-% [ax2,h3,h4] = plotyy(r.t.*1000,r.U.*1000,r.t.*1000,r.alpha.*l_tip.*1000);
-% %legend('body','appendage')
-% xlabel('time (ms)')
-% ylabel(ax2(1),'Body speed (mm/s)')
-% ylabel(ax2(2),'Appendage speed (mm/s)')
-% ylim(ax2(1),[0 800])
-% ylim(ax2(2),[-800 0])
-% grid on
 
 end
 
 function [t,X] = solver(p,options)
 
-tspan = [0 p.num_strokes*(p.spd_P+p.rtrn_P)];
-
-[t,X] = ode45(@gov_eqn,tspan,[p.X0; p.U0],options);
+[t,X] = ode45(@gov_eqn,p.t_span,[p.X0; p.U0],options);
 
     function dX = gov_eqn(t,X)
         % ODE of the dynamics of the system
@@ -253,14 +188,16 @@ tspan = [0 p.num_strokes*(p.spd_P+p.rtrn_P)];
         
         % Body speed
         U   = X(2);
+       
+        % Calculate current paddle angle from spline
+        gama = fnval(p.sp_ang_pd,t.*p.sT);
         
-        alph = 0;
-        
-        gama  = ang_func(t,p.ang_amp,p.spd_P,p.ang_start,p.spd_phs,p.rtrn_P);
-        v_n   = spd_func(t,p.spd_A,p.spd_P,p.spd_phs,p.rtrn_P,p.spd_0);
-        
-        % Appendage position (gama) and speed (alph)
-        %[gama,alph] = app_kine(t,p.gamma1,p.gamma2,p.P);
+        % Calculate current paddle speed from spline
+        if t <= p.t_end
+            v_n  = fnval(p.sp_spd_pd,t.*p.sT) ./p.sL .*p.sT;
+        else 
+            v_n = 0;
+        end
         
         % Thrust
         thrust = app_thrust(gama,v_n,p,U);
@@ -285,7 +222,7 @@ v_app = - v_n + U.*cos(gama-pi/2);
 
 thrust = - cos(gama-pi/2)*....
                     0.5*p.rho_water.*p.Cd_app.*...
-                    p.h.*p.pLen.*v_app.*abs(v_n);
+                    p.h.*p.pLen.*v_app.*abs(v_app);
      %TODO: subtract velocity from forward movement
      
 % Adjust direction of thrust

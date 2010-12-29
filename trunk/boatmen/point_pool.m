@@ -83,13 +83,15 @@ if isempty(dir([dPath filesep 'pooled_data.mat']))
                     d(idx).seq  = a(i).name;
                     tmp = point_analyze([dPath filesep a(i).name]);
                     
-                    d(idx).t           = tmp.t';
-                    d(idx).frames      = tmp.frames';
-                    d(idx).pwr         = tmp.pwr;
-                    d(idx).rtrn        = tmp.rtrn;
                     d(idx).body_len    = tmp.body_len;
                     d(idx).app_len     = tmp.app_len;
-                    d(idx).cntr_G      = tmp.cntr_G;
+                    d(idx).t           = tmp.t';
+                    d(idx).frames      = tmp.frames';
+                    d(idx).sp_ang_pd   = tmp.sp_ang_pd;
+                    d(idx).sp_ang_wrst = tmp.sp_ang_wrst;
+                    d(idx).sp_spd_pd   = tmp.sp_spd_pd;
+                    d(idx).sp_spd_bod  = tmp.sp_spd_bod;
+                    d(idx).t_pwr       = tmp.t_pwr;
                     
                     % Get body mass
                     load([dPath filesep a(i).name filesep 'body_mass.mat']);
@@ -167,83 +169,6 @@ else
     disp(' ')
     
 end
-
-
-%% Find model parameters for each sequence
-
-
-for i = 1:length(d)
-    
-    % Step through power strokes
-    for j = 1:length(d(i).pwr)
-       spd_A(j)     = d(i).pwr(j).spd_A;
-       spd_phs(j)   = d(i).pwr(j).spd_phs;
-       spd_P(j)     = d(i).pwr(j).spd_P;
-       
-       ang_P(j)     = d(i).pwr(j).ang_P;
-       ang_amp(j)   = d(i).pwr(j).ang_amp;
-       ang_start(j) = d(i).pwr(j).ang_start;
-       ang_start(j) = d(i).pwr(j).ang_start;
-    end
-    
-    % Step through return strokes
-    for j = 1:length(d(i).rtrn)
-        periods(j) = d(i).rtrn(j).period;
-    end
-    
-    % Store average speed variables for power stroke
-    d(i).spd_A     = mean(spd_A);
-    d(i).spd_phs   = mean(spd_phs);
-    d(i).spd_P     = mean(spd_P);
-    d(i).ang_P     = mean(ang_P);
-    d(i).initial_speed = 0; 
-    %TODO: calculate initial speed for each sequence
-    
-    % Store average angular variables for power stroke
-    d(i).ang_amp   = mean(ang_amp);
-    d(i).ang_start = mean(ang_start);
-    
-    % Store average return stroke period
-    d(i).rtrn_P    = mean(periods);
-    
-    d(i).num_strokes = 3;
-    
-    clear spd_A spd_phs spd_P ang_P ang_amp ang_start
-    
-    % Calculate COM speed
-    d(i).U = sqrt(diff(d(i).cntr_G(:,1)).^2 + diff(d(i).cntr_G(:,1)).^2)./diff(d(i).t);
-    
-    
-    % Plot simulation
-    if 0
-        
-        r(i) = boatmen_model(d(i));
-        
-        figure;
-        subplot(3,1,1)
-        [ax,h1,h2] = plotyy(r(i).t.*1000,r(i).gamma,r(i).t.*1000,r(i).v_n.*1000);
-        ylabel(ax(1),'gamma (rad)')
-        ylabel(ax(2),'v_n (mm/s)')
-        grid on
-        
-        subplot(3,1,2)
-        plot(r(i).t.*1000,r(i).thrust.*10^6,'g',r(i).t.*1000,r(i).drag.*10^6,'-')
-        legend('thrust','drag')
-        ylabel('Force (micro N)')
-        grid on
-        
-        subplot(3,1,3)
-        plot(r(i).t.*1000,r(i).U.*1000,'-',...
-             (d(i).t(2:end)-d(i).t(1)).*1000,d(i).U.*1000,'r-')
-    end  
-    
-end
-
-% Save data
-disp('')
-disp('Saving data_for_sims . . .')
-save([dPath filesep 'data_for_sims'],'d')
-
 
 
 
