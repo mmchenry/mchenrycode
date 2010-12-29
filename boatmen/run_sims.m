@@ -12,7 +12,8 @@ end
 
 % Load 'd'
 %global d
-load([dPath filesep 'data_for_sims'])
+%load([dPath filesep 'data_for_sims'])
+load([dPath filesep 'pooled_data'])
 
 
 %% Parameter values
@@ -20,7 +21,7 @@ load([dPath filesep 'data_for_sims'])
 
 
 % Inital estimate for parameter values
-Cd_app0 = 7;
+Cd_app0 = 1;
 Cd_body0 = 1;
 
 % Water density (kg m^-3)
@@ -35,78 +36,57 @@ num_strokes = 5.2;
 % Which stroke to compare with the data 
 stroke_num = 4;
 
+% Interval between plotting steps of iterations
+plot_interval = 5;
+
 
 %% Simulate each stroke in every sequence
 
 if 1 %isempty(dir([dPath filesep 'data_for_comparison.mat']))
-    
-    for i = 1:length(d)
+    for i = 1 %1:length(d)
         
-        k = 1;
+        disp(['Starting ' num2str(i) ' of ' num2str(length(d)) ...
+              '  individuals . . .'])
         
-        com(i).t = d(i).t;
-        com(i).U = d(i).U;
         
-        disp(' ')
-        disp([num2str(i) ' of ' num2str(length(d)) ' sequences started ...'])
+        dC = d(i);
+        dC.num_strokes = num_strokes;
+        dC.plot_interval = plot_interval;
+        dC.iteration = [];
+        dC.error     = [];
         
-        for j = 1:length(d(i).pwr)
-            
-            % Find indices for stroke if pwr preceeds rtrn
-            if (length(d(i).rtrn)>=j) && (d(i).pwr(j).idx(1) < d(i).rtrn(j).idx(1))
-                idx = [d(i).pwr(j).idx d(i).rtrn(j).idx];
-                rtrn_P = range(d(i).rtrn(j).t);
-                run_sim = 1;
+        for j = 1 %1:size(d(i).t_pwr,1)
                 
-                % Find indices for stroke if pwr follows rtrn
-            elseif (length(d(i).rtrn)>=j+1) && (d(i).pwr(j).idx(1) < d(i).rtrn(j+1).idx(1))
-                idx = [d(i).pwr(j).idx d(i).rtrn(j+1).idx];
-                rtrn_P = range(d(i).rtrn(j+1).t);
-                run_sim = 1;
-                
-                % Skip if no rtrn exists for current power stroke
-            else
-                run_sim = 0;
-                
-            end
-            
-            if run_sim
-                
-                % Define model parameter values to model current stroke
-                dM = d(i).pwr(j);
-                dM.num_strokes = num_strokes;
-                dM.stroke_num  = stroke_num;
-                dM.body_len = d(i).body_len;
-                dM.app_len = d(i).app_len;
-                dM.body_mass = d(i).body_mass;
-                dM.rtrn_P = rtrn_P;
-                dM.t = d(i).t;
-                dM.U = d(i).U;
-                
-                % Calculate initial speed
-                dM.initial_speed = mean(d(i).U(idx(1:3)));
+                dC.t_events  = d(i).t_pwr(j,:);
+                dC.U_initial = fnval(dC.sp_spd_bod,dC.t_events(1));
                 
                 % Find optimal drag coefficients
-                [Cd_app,Cd_bod] = run_optimization(dM,[Cd_app0 Cd_body0],idx);
+                [Cd_app,Cd_bod,dC] = run_optimization(dC,[Cd_app0 Cd_body0]);
                 
+                % Run simulation with coefficients
+                r = boatmen_model(dC,Cd_app,Cd_bod);
+                    
+                % Plot results
+                if 0
+                    uK = fnval(dC.sp_spd_bod,r.t);
+                    
+                    figure;
+                    plot(r.t,r.U,'r',r.t,uK,'-')
+                end
                 
                 % Store
-                com(i).strk(k).idx = idx;
-                com(i).strk(k).t = d(i).t(idx(1:end-1));
-                com(i).strk(k).U = d(i).U(idx(1:end-1));
-                com(i).strk(k).d = dM;
-                com(i).strk(k).Cd_app = Cd_app;
-                com(i).strk(k).Cd_bod = Cd_bod;
+                com(i).strk(j).r = r;
+                com(i).strk(j).d = dC;
+                com(i).strk(j).Cd_app = Cd_app;
+                com(i).strk(j).Cd_bod = Cd_bod;
                 
-                k = k+1;
+                clear r Cd_app Cd_bod
                 
-                clear rtrn_P
-                
-            end
-            
-            disp(['    ' num2str(j) ' of ' num2str(length(d(i).pwr)) ...
+                disp(['    ' num2str(j) ' of ' num2str(size(d(i).t_pwr,1)) ...
                                                 ' strokes completed'])
         end
+        
+        clear dC
     end
     
     save([dPath filesep 'data_for_comparison'],'com')
@@ -119,48 +99,54 @@ else
     load([dPath filesep 'data_for_comparison'])
 end
 
+i=1;j=1;figure;plot(com(i).strk(j).d.iteration,com(i).strk(j).d.error,'o-')
+return
 
 %% Visualize results
 
-for i = 1:length(com)
-    
-    figure
+%seqs = [1 2 4:length(com)];
+seqs = [1:length(com)];
+
+for i = 1 %seqs
+    if 1
+        figure
+    end
     
     t_all = [];
     uM_all = [];
     uK_all = [];
     
-    for j = 1:length(com(i).strk)
-        curr = com(i).strk(j);
-        r = boatmen_model(curr.d,curr.Cd_app,curr.Cd_bod);
-        [tK,uM,uK] = comp_stroke(r,curr.d,curr.idx,curr.d.stroke_num);
+    for j = 1 %:length(com(i).strk)
+        c  = com(i).strk(j);
+        uK = fnval(c.d.sp_spd_bod,c.r.t);
         
         % Store
-        t_all    = [t_all; tK+curr.t(1)];
-        uM_all   = [uM_all; uM];
-        uK_all   = [uK_all; uK];
-        cd_app_tmp(j)  = curr.Cd_app;
-        cd_bod_tmp(j)  = curr.Cd_bod;
+        cd_app_tmp(j)  = c.Cd_app;
+        cd_bod_tmp(j)  = c.Cd_bod;
         
         % Plot stroke data
-        subplot(2,length(com(i).strk),j)
-        h = plot(tK,uM,'r',tK,uK,'-');
-        title(['Stroke ' num2str(j)])
+        if 1
+            subplot(2,length(com(i).strk),j)
+            h = plot(c.r.t,c.r.U,'r',c.r.t,uK,'-');
+            title([num2str(j) ': Cbd = ' num2str(c.Cd_bod) ...
+                ' Cap= ' num2str(c.Cd_app)])
+        end
         
-        clear curr
+        clear c
     end
     
     body_len = com(1).strk(1).d.body_len;
     app_len  = com(1).strk(1).d.app_len;
+    U = fnval(d(i).sp_spd_bod,d(i).t);
     
-    Re_bod(i)= mean(uK_all).*d(i).body_len.*rho_water ./ mu;
+    Re_bod(i) = mean(U).*d(i).body_len.*rho_water ./ mu;
     Cd_app(i) = max(cd_app_tmp);
     Cd_bod(i) = max(cd_bod_tmp);
     
-    %subplot(2,length(com(i).strk),j+1:j+length(com(i).strk))
-    %plot(t_all,uM_all,'r',t_all,uK_all,'b')
     
 end
+
+return
 
 [Re_bod,idx] = sort(Re_bod);
 
@@ -178,45 +164,14 @@ ylabel('log10 Cd of body')
 
 
 
-return
 
- % To evaluate results, run simulation with optimal values
-            
-    
-    
 
-subplot(1,length(d(i).pwr))
-            plot(tK,uK,'r',tK,uM,'-')
-    
-%    % Calculate mean spd from measurements
-%    avg_spd = mean(d(i).U);
-%     
-%    % reynold number for body
-%    Re_bod(i) = avg_spd.*d(i).body_len.*rho_water ./ mu;
-%    [Cd_app(i),Cd_bod(i)] = run_optimization(d(i),avg_spd,[Cd_app0 Cd_body0]);
-%    
-%    disp(' ')
-%    disp(['Finished ' num2str(i) ' of ' num2str(length(d))])
-%    
-% end
-% 
-% [Re_bod,idx] = sort(Re_bod);
-% 
-% figure;
-% subplot(2,1,1)
-% plot(log10(Re_bod),log10(Cd_app(idx)),'o-')
-% xlabel('log10 Re of body')
-% ylabel('log10 Cd of appendage')
-% 
-% subplot(2,1,2)
-% plot(log10(Re_bod),log10(Cd_bod(idx)),'o-')
-% xlabel('log10 Re of body')
-% ylabel('log10 Cd of body')
+ 
 
 end
 
 
-function [Cd_app,Cd_bod] = run_optimization(d,X0,idx)
+function [Cd_app,Cd_bod,dT] = run_optimization(d,X0)
 
 global dT
 
@@ -243,17 +198,17 @@ Cd_bod = X(2);
         r = boatmen_model(d,Cd_app,Cd_body);
         
         % Evaluate model at same times as the kinematics
-        [tK,uM,uK] = comp_stroke(r,d,idx,d.stroke_num);
+        uK = fnval(d.sp_spd_bod,r.t);
         
         % Visualize model/data comparison 
         if 0
             figure;
-            plot(tK,uK,'r',tK,uM,'-')
+            plot(r.t,r.U,'r',r.t,uK,'-')
         end
         
         % Total error
-        e = sum((uM-uK).^2);
-        
+        e = sum((r.U-uK).^2);
+         
     end
 
 end
@@ -267,70 +222,24 @@ stop = false;
 r = boatmen_model(dT,X(1),X(2));
 
 iter = optimValues.iteration;
-if 0 %isfield(d,'last_iter') && ((floor(d.last_iter/5) > floor(iter/5)))
-    %figure;
-    %plot(r.t,r.U,'r')
-    [tK,uM,uK] = comp_stroke(r,dT,dT.idx,dT.stroke_num);
+
+% Evaluate model at same times as the kinematics
+uK = fnval(dT.sp_spd_bod,r.t);
+
+dT.iteration = [dT.iteration; iter];
+dT.error     = [dT.error; sum((r.U-uK).^2)];
+
+if 0 %floor(iter./dT.plot_interval) == ceil(iter./dT.plot_interval) 
     
-    plot(tK,uM,'-',tK,uK,'r-')
+    figure;
+    plot(1000.*r.t,1000.*r.U,'r',1000.*r.t,1000.*uK,'-')
     title([num2str(iter) '   Cd app = ' num2str(X(1)) '   Cd body = ' num2str(X(2))])
-    grid on
-    pause(.2)
-    %xlim([d.stroke_num.*d.spd_P*2 (d.stroke_num+1).*d.spd_P*2]-d.spd_phs)
+    %grid on
+    pause(.01)
+    axis square
+    ylim([0 100])
+    set(gca,'YTick',1000.*[0:.02:.1])
 end
-d.last_iter = iter;
-
 end
-
-function [tK,uM,uK] = comp_stroke(r,d,idx,stroke_num)
-
-% Extract current stroke kinematics
-tK = d.t(idx(1:end-1));
-uK = d.U(idx(1:end-1));
-
-% Time vector for kinematics
-tK = tK -  tK(1) + mean(diff(tK));
-
-% Calculate index for model values after initial strokes
-idxM = (r.t > (stroke_num-1).*(d.spd_P + d.rtrn_P));
-
-tM = r.t(idxM) - r.t(find(idxM,1,'first'));
-uM = r.U(idxM);
-
-if max(tM) < max(tK)
-    error('need to run simulation for more beats')
-end
-
-% Interpolate
-uM = interp1(tM,uM,tK);
-end
-
-
-function [tK,uM,uK] = mod_compare(r,d)
-
-% Time vector for kinematics
-tK = d.t(1:end-1) -  d.t(1) + mean(diff(d.t));
-
-% Calculate idx for measurements at start of first power stroke
-idxK = tK >= d.t(1);
-
-% Trim speed and time vectors
-tK = tK(idxK) - tK(find(idxK,1,'first'));
-uK = d.U(idxK);
-
-% Calculate idx for model values after initial stroke
-idxM = (r.t > (d.spd_P/2 + d.rtrn_P));
-
-tM = r.t(idxM) - r.t(find(idxM,1,'first'));
-uM = r.U(idxM);
-
-if max(tM) < max(tK)
-    error('need to run simulation for more beats')
-end
-
-% Interpolate
-uM = interp1(tM,uM,tK);
-end
-
 
 

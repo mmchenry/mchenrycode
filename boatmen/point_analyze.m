@@ -7,9 +7,6 @@ function d = point_analyze(imPath)
 
 visSteps = 1;
 
-% Default smoothing tolerances
-d.tolAng = 6.3e-6;
-d.tolPos = 2e-3;
 
 % Factor to multiple the scaling factor by when interactively selecting it
 tolMultiplier = 0.75;
@@ -25,7 +22,13 @@ if nargin < 2
 end
 
 % Cutoff freq for low pass filter when calculating speed (Hz)
-cut_freq = 80;
+cut_freq = 90;
+
+% Tolerance for smoothing splines of angle data
+tol_ang = 1e-4;
+
+% Tolerance for smoothing splines of speed data
+tol_spd = 1e-7;
 
 
 %% Define directories
@@ -181,6 +184,9 @@ for i = frames(nonan)
     clear S tip wrist elbow
 end
 
+
+%% Filter and spline fit the data
+
 % Filter coordinate data
 d.wrist_L = [butter_filt(d.wrist_L(:,1),1./mean(diff(time)),cut_freq,'low') ...
              butter_filt(d.wrist_L(:,2),1./mean(diff(time)),cut_freq,'low')];
@@ -189,205 +195,115 @@ d.tip_L   =  [butter_filt(d.tip_L(:,1),1./mean(diff(time)),cut_freq,'low') ...
 d.elbow_L =  [butter_filt(d.elbow_L(:,1),1./mean(diff(time)),cut_freq,'low') ...
               butter_filt(d.elbow_L(:,2),1./mean(diff(time)),cut_freq,'low')];
 
-clear idx
+% Define center position of paddle   
+c_cntr  = [mean([d.wrist_L(:,1) d.tip_L(:,1)],2) ...
+        mean([d.wrist_L(:,2) d.tip_L(:,2)],2)];
+    
+% Define angle of paddle
+ang_pd = unwrap(atan2(d.tip_L(:,2)-d.wrist_L(:,2),...
+                      d.tip_L(:,1)-d.wrist_L(:,1)));
+                  
+% Define angular position of wrist
+ang_wrst = unwrap(atan2(d.wrist_L(:,2),d.wrist_L(:,1)));                  
 
-%% Visualize whole sequence
+% Define speed of paddle & body
+spd1    = [sqrt(  diff(c_cntr(:,1)).^2 + ...
+           diff(c_cntr(:,2)).^2  ).*frame_rate]';
+spd_bod = [sqrt(  diff(d.cntr_G(:,1)).^2 + ...
+           diff(d.cntr_G(:,2)).^2  ).*frame_rate]';
+t_spd = d.t(1:end-1)+mean(diff(d.t))/2;
 
+% Spline for angle of paddle
+d.sp_ang_pd = spaps(d.t,ang_pd,tol_ang);
+
+% Spline for anglular position of paddle
+d.sp_ang_wrst = spaps(d.t,ang_wrst,tol_ang);
+
+% Spline for angle of paddle
+d.sp_ang_pd = spaps(d.t,ang_pd,tol_ang);
+
+% Spline for speed of paddle
+d.sp_spd_pd = spaps(t_spd,spd1,tol_spd);
+
+% Spline for speed of body
+d.sp_spd_bod = spaps(t_spd,spd_bod,tol_spd);
+
+% Visualize spline fits
 if 0
-    cntr_G  = d.cntr_G;
-    c_wrist = d.wrist_L;
-    c_tip   =  d.tip_L;
-           
-%     c_wrist = [d.wrist_L(:,1) d.wrist_L(:,2)];
-%     c_tip   = [d.tip_L(:,1) d.tip_L(:,2)];
-    c_cntr  = [mean([c_wrist(:,1) c_tip(:,1)],2) ...
-               mean([c_wrist(:,2) c_tip(:,2)],2)];
-           
-    % Calculate app angle
-    angl_tmp = atan2(c_tip(:,2),c_tip(:,1));
-    
-    % Calculate app speed discretely
-    spd_tmp = [sqrt(  diff(c_cntr(:,1)).^2 + ...
-               diff(c_cntr(:,2)).^2  ).*frame_rate]';
-    
-    % Calculate COM speed
-    U_tmp = sqrt(diff(cntr_G(:,1)).^2 + diff(cntr_G(:,1)).^2)./diff(d.t');
-
-    % Filter data
-    spd_tmp = butter_filt(spd_tmp,1./mean(diff(time)),cut_freq,'low');
-    angl_tmp = butter_filt(angl_tmp,1./mean(diff(time)),cut_freq,'low');
-    %U_tmp = butter_filt(U_tmp,1./mean(diff(time)),cut_freq,'low');
-    
-    figure
-    
-    subplot(3,1,1)
-    plot(d.t,angl_tmp.*180./pi)
+    subplot(4,1,1)
+    plot(d.t,ang_pd,'ok',d.t,fnval(d.sp_ang_pd,d.t),'-k')
+    ylabel('angle of paddle')
     grid on
-    xlabel('time (s)')
-    ylabel('Appendage angle (deg)')
     
-    subplot(3,1,2)
-    plot(d.t(2:end),1000.*spd_tmp)
+    subplot(4,1,2)
+    plot(d.t,ang_wrst,'ok',d.t,fnval(d.sp_ang_wrst,d.t),'-k')
+    ylabel('angle of wrist')
     grid on
-    xlabel('time (s)')
-    ylabel('Appendage speed (mm/s)')
-
     
-    subplot(3,1,3)
-    plot(d.t(2:end),1000.*U_tmp)
+    subplot(4,1,3)
+    plot(t_spd,spd1,'ok',t_spd,fnval(d.sp_spd_pd,t_spd),'-k')
+    ylabel('speed of appendage')
     grid on
-    xlabel('time (s)')
-    ylabel('Body speed (mm/s)')
     
-    clear angl_tmp spd_tmp U_tmp cntr_G
+    subplot(4,1,4)
+    plot(t_spd,spd_bod,'ok',t_spd,fnval(d.sp_spd_bod,t_spd),'-k')
+    ylabel('speed of body')
+    grid on   
+    pause
 end
+
+clear idx t_spd spd1 ang_pd ang_wrst c_cntr
+
 
 %% Identify power & recovery strokes
 
-% Threshold for finding peaks
-thresh = 0.2;
+% Splines of angular position of paddle
+sp    = d.sp_ang_wrst;
+Dsp   = fnder(sp,1);
+D2sp  = fnder(sp,2);
 
-% Find angle of tip
-angl = atan2(d.tip_L(:,2),d.tip_L(:,1));
+% Find reversals
+t_rev = fnzeros(Dsp,[d.t(1) d.t(end)]);
+t_rev = t_rev(1,:);
 
-f = frames(nonan)';
+% Find sign of second derivative
+D2sgn = fnval(D2sp,t_rev)./abs(fnval(D2sp,t_rev));
 
-% Normalize
-angl = (angl-mean(angl)) ./ range(angl);
+% Locate times of starts of power and return strokes
+t_pwr  = t_rev(D2sgn==1);
+t_rtrn = t_rev(D2sgn==-1);
 
-% Find valleys
-iVal = angl < -thresh;
-fVal = f(iVal);
-brks = [1; find(diff(fVal)>6); length(fVal)];
-
-for i = 1:length(brks)-1
-    tVal(i) = mean(fVal(brks(i)+1:brks(i+1))) ./ frame_rate;
+for i = 1:length(t_pwr)
+    % Find end of power stroke
+    t_end = t_rtrn(find(t_rtrn>=t_pwr(i),1,'first'));
+    if isempty(t_end)
+        break
+    else
+        if i==length(t_pwr)
+            d.t_pwr(i,:) = [t_pwr(i) t_end d.t(end)];
+        else
+            d.t_pwr(i,:) = [t_pwr(i) t_end t_pwr(i+1)];
+        end
+    end
 end
-
-clear brks iVal fVal
-
-% Find peaks
-iPk  = angl > thresh;
-fPk  = f(iPk);
-brks = [1; find(diff(fPk)>6); length(fPk)];
-
-for i = 1:length(brks)-1
-    tPk(i) = (mean(fPk(brks(i)+1:brks(i+1)))-1) ./ frame_rate;
-end
-
-% Define indices for power and recovery strokes
-if tPk(1) < tVal(1)
-    
-    for i = 1:min([length(tPk) length(tVal)])
-        d.rtrn(i).idx = find((d.t >= tPk(i)) & (d.t < tVal(i)));
-        d.rtrn(i).t   = d.t(d.rtrn(i).idx);
-    end
-    
-    for i = 1:min([length(tPk)-1 length(tVal)])
-        d.pwr(i).idx  = find((d.t >= tVal(i)) & (d.t < tPk(i+1)));
-        d.pwr(i).t    = d.t(d.pwr(i).idx);
-    end
-    
-else
-    
-    %         if min([length(tVal) length(tPk)]) > 2
-    %             for i=1:min([length(tVal) length(tPk)]);
-    %                 if tVal(i)-tPk(i) > 0
-    %
-    %                 end
-    %             end
-    %         end
-    %
-    for i = 1:min([length(tPk) length(tVal)])
-        d.pwr(i).idx = find((d.t >= tVal(i)) & (d.t < tPk(i)));
-        d.pwr(i).t   = d.t(d.pwr(i).idx);
-    end
-    
-    for i = 1:min([length(tPk) length(tVal)-1])
-        d.rtrn(i).idx  = find((d.t >= tPk(i)) & (d.t < tVal(i+1)));
-        d.rtrn(i).t    = d.t(d.rtrn(i).idx);
-    end
-    
-end
-
-clear tPk tVal brks fPk iPk thresh
 
 % Plot identification of power and recover strokes
 if 0
-    figure
+    %figure
     
-    plot(d.t,angl,'ko')
+    plot(d.t,fnval(sp,d.t),'k-')
+    yL = ylim;
     hold on
-    for i = 1:length(d.pwr)
-        plot(d.t(d.pwr(i).idx),angl(d.pwr(i).idx),'r+')
+    for i = 1:length(d.t_pwr)
+        plot([d.t_pwr(i,1) d.t_pwr(i,1)],yL,'r-',...
+             [d.t_pwr(i,2) d.t_pwr(i,2)],yL,'g-')
     end
-    
-    for i = 1:length(d.rtrn)
-        plot(d.t(d.rtrn(i).idx),angl(d.rtrn(i).idx),'g+')
-    end
-    
-    grid on
+    hold off
+    %grid on
+    pause
 end
 
-clear angl f iVal fVal brks
-
-
-%% Calculate appendage kinematics for power stroke
-
-d.num_strokes = 3;
-
-% Loop through each power stroke
-for i = 1:length(d.pwr)
-    
-    % Points for current power stroke
-    c_wrist = [d.wrist_L(d.pwr(i).idx,1) ...
-        d.wrist_L(d.pwr(i).idx,2)];
-    c_tip   = [d.tip_L(d.pwr(i).idx,1) ...
-        d.tip_L(d.pwr(i).idx,2)];
-    c_cntr  = [mean([c_wrist(:,1) c_tip(:,1)],2) ...
-        mean([c_wrist(:,2) c_tip(:,2)],2)];
-    
-    % Calculate speed discretely
-    spd1 = [sqrt(  diff(c_cntr(:,1)).^2 + ...
-        diff(c_cntr(:,2)).^2  ).*frame_rate]';
-    
-    d.pwr(i).spd = spd1;
-    
-    %d.pwr(i).spd = butter_filt(spd1,1./mean(diff(time)),cut_freq,'low'); 
-    
-    clear spd1
-    
-    % Perform curve fit to velocity data
-    [A,phs,P,spd_0] = fit_spd_func(d.pwr(i).t(2:end),d.pwr(i).spd);
-    
-    % Store parameters
-    d.pwr(i).spd_A      = A;
-    d.pwr(i).spd_phs    = phs;
-    d.pwr(i).spd_P      = P;
-    d.pwr(i).spd_0      = spd_0;
-    
-    % Calculate angle
-    d.pwr(i).angl = unwrap(atan2(c_tip(:,2)-c_wrist(:,2),...
-        c_tip(:,1)-c_wrist(:,1)));
-    
-    % Perform curve fit to angle data
-    [ang_amp,ang_start] = fit_ang_func(d.pwr(i).t,d.pwr(i).angl);
-    
-    % Store parameters
-    d.pwr(i).ang_P = P;
-    d.pwr(i).ang_amp = ang_amp;
-    d.pwr(i).ang_start = ang_start;
-    
-    clear A tau P ang_amp c_wrist c_tip c_cntr ang_start spd_0
-    
-end
-
-
-%% Calculate period of return stroke
-
-for i = 1:length(d.rtrn) 
-    d.rtrn(i).period = range(d.rtrn(i).t);   
-end
+clear sp Dsp D2sp t_rev D2sgn t_pwr t_rtrn
 
 
 %% Calculate appendage and body dimensions
@@ -401,125 +317,6 @@ appLength = mean(sqrt((b.xWrist(nonan)-b.xTip(nonan)).^2 + ...
 d.body_len   = bLength.*calconst;
 d.app_len    = appLength.*calconst;
 
-
-%% Plot angle and speed data
-
-if 0
-    figure
-    for i = 1:length(d.pwr)
-        subplot(2,1,1)
-        plot(d.pwr(i).t(2:end),d.pwr(i).spd.*1000,'-o')
-        ylabel('speed (mm/s)')
-        subplot(2,1,2)
-        plot(d.pwr(i).t,d.pwr(i).angl,'-o')
-        ylabel('angle')
-       % pause
-    end
-    
-    close
-end
-
-
-%% Plot power stroke data
-
-if 0    
-    figure
-    for i = 1:length(d.wrist_L(d.pwr(1).idx,1))
-        plot([d.wrist_L(d.pwr(1).idx(i),1) d.tip_L(d.pwr(1).idx(i),1)],...
-            [d.wrist_L(d.pwr(1).idx(i),2) d.tip_L(d.pwr(1).idx(i),2)],'o-',...
-            0,0,'ro');
-        hold on
-    end
-    axis equal
-    grid on
-end
-
-
-
-    
-    
-function [A,phs,P,spd_0] = fit_spd_func(t,spd)
-
-% Declare global variables (fixed parameters)
-global P phs spd_0
-
-% Period btwn samples
-dt = mean(diff(t));
-
-% Zero-out time vector
-%t = [t-t(1)+dt/2];
-t = t-t(1);
-
-% Period of speed oscillation
-P = range(t);
-
-% Initial speed
-spd_0 = spd(1);
-
-% Approximate parameter value(s)
-beta0(1) = max(spd);
-beta0(2) = t(spd==max(spd))-range(t)/2;
-
-bta = nlinfit(t,spd,@spd_func,beta0);
-
-%plot(t,spd,'o',t,spd_func(bta,t),'r');
-
-A = bta(1);
-phs = bta(2);
-
-
-function [A,ang_start] = fit_ang_func(t,ang)
-
-% Declare global variables (fixed parameters)
-global P ang_start
-
-% Period btwn samples
-dt = mean(diff(t));
-
-% Zero-out time vector
-t = [t-t(1)]';
-
-P = range(t);
-% Period of speed oscillation
-%P = 1.5.*range(t);
-
-ang_start = min(ang);
-
-
-%ang = ang - ang_start;
-
-% Approximate parameter value(s)
-beta0(1) = range(t)/2;
-
-% Find best fit for amplitude of angular change
-A = nlinfit(t,ang,@ang_func,beta0);
-
-%plot(t,ang,'o',t,ang_func(A,t),'r');
-
-function y = spd_func(b,t)
-% Function that defines the speed of the power stroke over time
-
-% Declare global variables (fixed parameters)
-global   P spd_0
-
-% Define parameter(s) to be found with nlinfit
-A = b(1);
-phs = b(2);
-
-% The equation
-y = spd_0 + A.*sin(pi.*(t-phs)./(1.5*P)).^2;
-
-
-function y = ang_func(b,t)
-% Defines angle of power stroke over time
-
-global P ang_start
-
-% Define parameter(s) to be found with nlinfit
-A = b(1);
-
-% The equation
-y = ang_start + A.*sin(pi.*(t)./(2.*(1.1*P))).^2;
 
     
 function S = localSystem(P1,P2)
