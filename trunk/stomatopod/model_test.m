@@ -42,10 +42,10 @@ indivs = [120 121 122 123 125 129 132 133 137];
 % Fixed for all individuals
 
 % water I (kg m^2)
-p.waterI      = 1e-8;
+%p.waterI      = 1e-8;
 
 % 3rd moment of area of dactyl (m^5) (for 12 mm long dactyl, r = 3 mm)
-p.dacA         = 0.25*(3e-3)*(12e-3)^4;
+p.dacA  = 0.25*(3e-3)*(12e-3)^4;
 
 % Density of water (kg/m^3)
 p.rho = 998;
@@ -72,17 +72,25 @@ for i = 1:length(indivs)
         
         if fd(j).indiv == indiv
             
-            % Load t_start t_end
+            % Load pk_start pk_end
             load([forcePath filesep 'peak_' fd(j).filename '.mat'])
             
-            % Calculate momentum
-            p_cum = calc_momentum(fd(j).t,fd(j).F,pk_start,pk_end);
+            % Calculate momentum from single force peak
+            p_cum_pk = calc_momentum(fd(j).t,pk_start,pk_end,fd(j).F);
             
-            r.p_meas(i)   = p_cum(end);
-            r.maxForce(i) = max(fd(j).F);
+            % Load t_start t_end
+            load([forcePath filesep 'intrvl_' fd(j).filename '.mat'])
+            
+            % Calculate momentum from entire impact period
+            p_cum_all = calc_momentum(fd(j).t,t_start,t_end,...
+                fd(j).Fx,fd(j).Fy,fd(j).Fz);
+            
+            r.p_meas_pk(i)   = p_cum_pk(end);
+            r.p_meas_all(i)  = p_cum_all(end);
+            r.maxForce(i)    = max(fd(j).F);
             
             % Clear variables
-            clear t_start t_end p_cum
+            clear t_start t_end p_cum_pk p_cum_all pk_start pk_end
             
             break
         end
@@ -121,25 +129,35 @@ title('model')
 ylabel('Momentum')
 
 subplot(1,2,2)
-boxplot(r.p_meas)
+boxplot(r.p_meas_pk)
 ylim([0 7e-3])
 title('measurement')
 
 
 figure
 subplot(3,1,1)
-plot(r.p_model,r.p_meas,'o')
-title('Momentum')
+plot(r.p_model,r.p_meas_pk,'o')
+title('Peak momentum')
 xlabel('Model')
 ylabel('Measurement')
 axis square
 grid on
 
 subplot(3,1,2)
-plot(r.dacMass,r.maxForce,'o')
-grid on 
+plot(r.p_model,r.p_meas_all,'o')
+title('Momentum of whole recording')
+xlabel('Model')
+ylabel('Measurement')
 axis square
+grid on
 
+subplot(3,1,3)
+plot(r.p_meas_pk,r.p_meas_all,'o')
+title('Momentum')
+xlabel('Measured from peak')
+ylabel('Measured from all')
+axis square
+grid on
 
 return
 if 0*visIndividual

@@ -100,7 +100,7 @@ end
 % Load coordinate data (nx6 matrix of 2d values for pos., vel., accel.)
 carp1   = importMathematica([p.simsPath filesep 'carpusP1.mat']);
 carp2   = importMathematica([p.simsPath filesep 'carpusP2.mat']);
-dac     = importMathematica([p.simsPath filesep 'dactylP1.mat']);
+dac     = importMathematica([p.simsPath filesep 'carpusP3.mat']);
 mV      = importMathematica([p.simsPath filesep 'mVP1.mat']);
 gnd     = importMathematica([p.simsPath filesep 'groundP1.mat']);
 
@@ -113,10 +113,10 @@ springTau = importMathematica([p.simsPath filesep 'springMoment.mat']);
 dragTau   = importMathematica([p.simsPath filesep 'dragMoment.mat']);
 
 % Calculate mV angular position
-mVAng  = unwrap(atan2(mV(:,2),mV(:,1)));
+mVAng  = mV(:,7);
 
 % Calculate input angle
-thetaIn  = unwrap(pi/2 - mVAng);
+thetaIn  = pi/2 - mVAng;
 
 % Calculate output angle
 h_BD  = sqrt(p.L1^2 + p.L2^2 - 2*p.L1*p.L2*cos(thetaIn));
@@ -142,7 +142,7 @@ idx = 1:length(thetaIn);
 
 % Trim data beyond where input angle = resting angle
 if max(thetaIn) > p.thetaRest
-    idx = 1:find(thetaIn > p.thetaRest,1,'first')+0;
+    idx = 1:find(thetaIn > p.thetaRest,1,'first')+1;
 else   
     warning('Theta-in never reaches resting angle')
 end
@@ -168,7 +168,8 @@ t_a = t_d(2:end-1,1);
 d.t = t_a;
 
 % Calculate angular velocity
-dacAngSpd = diff(dacAng(idx))./diff(t_d);
+%dacAngSpd = diff(dacAng(idx))./diff(t_d);
+dacAngSpd = carp1(idx,7);
 
 % Calculate dactyl speed
 dacCOMSpd      = sqrt(diff(dac(idx,1)).^2 + diff(dac(idx,2)).^2)./diff(t_d);
@@ -203,8 +204,8 @@ d.E_elastic  = abs(0.5 .* d.springTau .* (d.thetaIn-p.thetaRest));
 d.E_drag = cumtrapz(abs(d.thetaOut(1)-d.thetaOut),abs(d.dragTau));
 
 % Calculate kinetic energy
-d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.dacAngSpd.^2) + ...
-          (0.5 * p.dacMass .* d.dacBaseSpd.^2);
+%d.E_kin = (0.5 * p.dacMass .* d.dacCOMSpd.^2);
+d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.dacAngSpd.^2);
     
 % Interpolate position/velocity/acceleration data
 d.carp1PVA  = interp1(t_d,carp1(idx,:),t_a);
@@ -223,7 +224,7 @@ delete([p.simsPath filesep 'input_params.mat'])
 delete([p.simsPath filesep 'eval_time.mat'])
 delete([p.simsPath filesep 'carpusP1.mat'])
 delete([p.simsPath filesep 'carpusP2.mat'])
-delete([p.simsPath filesep 'dactylP1.mat']);
+delete([p.simsPath filesep 'carpusP3.mat'])
 delete([p.simsPath filesep 'mVP1.mat']);
 delete([p.simsPath filesep 'springMoment.mat']);
 delete([p.simsPath filesep 'dragMoment.mat']);
