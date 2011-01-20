@@ -20,7 +20,7 @@ end
 % Look for data file
 tmp = dir([currPath filesep 'force_pooled.mat']);
 
-if isempty(tmp)
+if 1 %isempty(tmp)
     
     for i = 1:length(a)
         
@@ -32,18 +32,20 @@ if isempty(tmp)
             % Load data from text file
             [n,Tz,Fz,Txy,Fx,Fy] = textread([currPath filesep a(i).name],...
                 '%q %f %f %f %f %f','headerlines',1);
-            force = (Fx.^2 + Fy.^2 + Fz.^2).^0.5;
-            
+            force_mag = (Fx.^2 + Fy.^2 + Fz.^2).^0.5;
         else
             % Load data from text file
             [n,Tz,Fz,Txy,Fx,Fy] = textread([currPath filesep a(i).name],...
                 '%q %f %f %q %q %q','headerlines',1);
-            force = Fz;
+            force_mag = Fz;
         end
         
         % Store force data
         fd(i).indiv    = iNum;
-        fd(i).F        = force;
+        fd(i).F        = force_mag;
+        fd(i).Fz       = Fz;
+        fd(i).Fx       = Fx;
+        fd(i).Fy       = Fy;
         fd(i).t        = Tz;
         fd(i).filename = a(i).name;
         

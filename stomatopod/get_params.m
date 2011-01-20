@@ -64,6 +64,10 @@ k_spring = k_lin .* dist_load.^2 .* cos(lambda);
 D_indx = [0.0769 0.074 0.0756 0.0659 0.073 0.0621 0.0682 0.0741 0.0753 ...
           0.0743 0.0746];
 
+% Moment of inertia for the water
+waterI = 10^-8 .* [0.0335 0.0499 0.0539 0.0999 0.0556 0.0667 0.1002 ...
+                   0.0981 0.1121 0.0753 0.0261];    
+      
 %TODO: Add values (and modify model) to deal with new drag coefficient
 
 i = find(indiv==indiv_num);
@@ -81,12 +85,18 @@ p.L5 = L5(i);
 p.h_AF  = h_AF(i);
 p.gamma = gamma(i);
 
-p.dacI = dac_I(i);
+p.dacI    = dac_I(i);
 p.dacMass = dac_mass(i);
 p.dacLen  = dac_len(i);
-p.D = D_indx(i);
+p.D       = D_indx(i);
 
 p.thetaStart = thetaStart(i);
 p.thetaRest  = thetaRest(i);
 p.kSpring = k_spring(i);
+
+p.waterI = waterI(i);
+
+% Density of water (kg/m^3)
+p.rho = 998;
+
 
