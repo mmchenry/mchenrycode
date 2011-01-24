@@ -9,7 +9,7 @@ indiv = 120;
 %% Path definitions (computer specific)
 
 % Path to text file of Mathematica commands
-p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/m_files_podmodel/sim_code.txt"'];
+p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
 
 % Path to the Mathematica kernel
 p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
@@ -27,7 +27,7 @@ forcePath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
 p.maxError = 10^-7;
 
 % Duration of simulation (s)
-p.simDur    = 0.010;
+p.simDur    = 0.002;
 
 % Time values to evaluate results(use 1000-5000)
 p.t = linspace(0,p.simDur,1000);
@@ -55,15 +55,21 @@ p.rho = 998;
 p = get_params(indiv,p);
 
 % Knock out drag
-%p.D = 0;
+p.D = 0;
 
-p.L3 = p.L3 +.1e-3;
+p.L3 = p.L3 + 0.0005;
+%p.waterI = 0;
+
+%dL = 1e-4;
 
 %p.D = 3*p.D;
 
 % Run simulation
 [d,result] = run_sim(p);
 
+L = check_linkage(p,0,10^6);
+
+minKT = min(L.KT_all);
 
 
 %% Visualize simulation results
@@ -88,17 +94,19 @@ plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_drag.*1000,'b',...
     d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
 ylabel('Energy (mJ)')
 xlabel('time (ms)')
-grid on
+%grid on
 legend('elastic','drag','kinetic','total','Location','West');
+title(['min KT = ' num2str(minKT)])
+xlim([0 2])
 
-
-subplot(2,1,2)
-plot(d.t(2:end).*1000,diff(d.E_elastic)./diff(d.t),'r',...
-    d.t(2:end).*1000,diff(d.E_drag)./diff(d.t),'b',...
-    d.t(2:end).*1000,diff(d.E_kin)./diff(d.t),'g')
-ylabel('Power (J/s)')
-xlabel('time (ms)')
-grid on
+% % Power graph
+% subplot(2,1,2)
+% plot(d.t(2:end).*1000,diff(d.E_elastic)./diff(d.t),'r',...
+%     d.t(2:end).*1000,diff(d.E_drag)./diff(d.t),'b',...
+%     d.t(2:end).*1000,diff(d.E_kin)./diff(d.t),'g')
+% ylabel('Power (J/s)')
+% xlabel('time (ms)')
+% grid on
 
 
 clear E_tot

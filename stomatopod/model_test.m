@@ -11,7 +11,7 @@ visIndividual = 1;
 
 
 % Path to text file of Mathematica commands
-p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/m_files_podmodel/sim_code.txt"'];
+p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
 
 % Path to the Mathematica kernel
 p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';

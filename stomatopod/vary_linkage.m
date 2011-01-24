@@ -5,7 +5,7 @@ function vary_linkage
 
 
 % Path to text file of Mathematica commands
-p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/m_files_podmodel/sim_code.txt"'];
+p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
 
 % Path to the Mathematica kernel
 p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
@@ -23,7 +23,7 @@ forcePath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
 p.maxError = 10^-7;
 
 % Duration of simulation (s)
-p.simDur    = 0.015;
+p.simDur    = 0.002;
 
 % Time values to evaluate results(use 1000-5000)
 p.t = linspace(0,p.simDur,1000);
@@ -32,10 +32,14 @@ p.t = linspace(0,p.simDur,1000);
 visData = 0;
 echoData = 0;
 animate = 0;
-
-dL = 1e-4;
-
 indiv = 120;
+
+p = get_params(indiv,p);
+
+L3_min = p.L3 - 1e-4;
+L3_max = p.L3 + 10e-4;
+
+
 
 
 
@@ -61,7 +65,8 @@ p = get_params(indiv,p);
 p_start = p;
 
 
-L3s = linspace(p.L3-dL,p.L3+dL,5);
+L3s = linspace(L3_min,L3_max,5);
+L3s = L3s(end:-1:1);
 
 clrs = {'r-','g-','b-'};
 
@@ -90,7 +95,8 @@ for i = 1:length(L3s)
     rD.alpha(i)      = max(dD.dacAngSpd);
     rD.E_drag(i)     = max(dD.E_drag);
     rD.theta_max(i)  = dD.thetaOut(idx)-dD.thetaOut(1);
-    
+    rD.t_peak(i)     = dD.t(dD.dacAngSpd==max(dD.dacAngSpd));
+    rD.KT_min(i)     = min(dD.KT);
     
     % Run the model without drag
     p.D = 0;
@@ -104,15 +110,41 @@ for i = 1:length(L3s)
     rN.alpha(i)      = max(dN.dacAngSpd);
     
     rN.theta_max(i)  = dN.thetaOut(idx)-dN.thetaOut(1);
+    rN.t_peak(i)     = dD.t(dN.dacAngSpd==max(dN.dacAngSpd));
+    rN.KT_min(i)     = min(dN.KT);
 
-%     r.al_pred(i)     = sqrt(p.kSpring./((p.dacI+p.waterI))) * ...
-%                              ((p.thetaRest-p.thetaStart));
-    
+    rN.al_pred(i)     = sqrt(p.kSpring./((p.dacI+p.waterI))) * ...
+                             ((p.thetaRest-p.thetaStart));
+    %figure;plot(dN.t,p.thetaRest-dN.thetaIn)
     % Reset parameter values for next loop
     p = p_start;
+    
+    % Update status
+    disp([num2str(i) ' of ' num2str(length(L3s)) ' completed'])
 
 end
 
+
+subplot(2,1,1)
+plot(1000.*rD.L3,1000.*rD.t_peak,'o-',1000.*rN.L3,1000.*rN.t_peak,'ro-')
+legend('w/drag','no drag')
+ylabel('time to peak speed (ms)')
+xlabel('L3')
+axis square
+
+subplot(2,1,2)
+plot(1000.*rD.L3,rD.alpha.*(180/pi)./1000,'o-',...
+     1000.*rN.L3,rN.alpha.*(180/pi)./1000,'ro-',...
+     1000.*rN.L3,rN.al_pred.*(180/pi)./1000,'k-')
+ylabel('max ang speed (deg/s)')
+xlabel('L3')
+axis square
+
+
+
+return
+
+% Plot results
 figure;
 subplot(3,1,1)
 plot(rD.L3,(180/pi).*rD.theta_max,'o-',...
@@ -135,7 +167,9 @@ ylabel('max ang speed (deg/s)')
 xlabel('L3')
 axis square
 
-return
+
+
+
 
 figure
 subplot(3,1,1)
