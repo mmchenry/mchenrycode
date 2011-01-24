@@ -111,6 +111,7 @@ gnd     = importMathematica([p.simsPath filesep 'groundP1.mat']);
 % Load torque data
 springTau = importMathematica([p.simsPath filesep 'springMoment.mat']);
 dragTau   = importMathematica([p.simsPath filesep 'dragMoment.mat']);
+KE        = importMathematica([p.simsPath filesep 'KE.mat']);
 
 % Calculate mV angular position
 mVAng  = mV(:,7);
@@ -169,7 +170,8 @@ d.t = t_a;
 
 % Calculate angular velocity
 %dacAngSpd = diff(dacAng(idx))./diff(t_d);
-dacAngSpd = carp1(idx,7);
+dacAngSpd   = carp1(idx,7);
+dacAngAccel = carp1(idx,8);
 
 % Calculate dactyl speed
 dacCOMSpd      = sqrt(diff(dac(idx,1)).^2 + diff(dac(idx,2)).^2)./diff(t_d);
@@ -183,9 +185,10 @@ d.thetaIn   = interp1(t_d,thetaIn(idx),t_a);
 d.thetaOut  = interp1(t_d,thetaOut(idx),t_a);
 
 % Interpolate speed data
-d.dacAngSpd  = interp1(t_v,dacAngSpd(idx(1:end-1)),t_a);
-d.dacCOMSpd  = interp1(t_v,dacCOMSpd(idx(1:end-1)),t_a);
-d.dacBaseSpd = interp1(t_v,dacBaseSpd(idx(1:end-1)),t_a);
+d.dacAngSpd   = interp1(t_v,dacAngSpd(idx(1:end-1)),t_a);
+d.dacAngAccel = interp1(t_v,dacAngAccel(idx(1:end-1)),t_a);
+d.dacCOMSpd   = interp1(t_v,dacCOMSpd(idx(1:end-1)),t_a);
+d.dacBaseSpd  = interp1(t_v,dacBaseSpd(idx(1:end-1)),t_a);
 
 % Interpolate torque data
 d.springTau   = interp1(t_d,springTau(idx),t_a);
@@ -198,14 +201,16 @@ d.dacAngMomentum = (p.dacI+p.waterI) .* d.dacAngSpd;
 d.dacLinMomentum = p.dacMass .* d.dacCOMSpd;
 
 % Calculate elastic energy (assumes negative displacement of mV)
-d.E_elastic  = abs(0.5 .* d.springTau .* (d.thetaIn-p.thetaRest));
+%d.E_elastic  = abs(0.5 .* d.springTau .* (d.thetaIn-p.thetaRest));
+d.E_elastic  = 0.5 .* p.kSpring .* (d.thetaIn-p.thetaRest).^2;
 
 % Calculate drag energy
 d.E_drag = cumtrapz(abs(d.thetaOut(1)-d.thetaOut),abs(d.dragTau));
 
 % Calculate kinetic energy
 %d.E_kin = (0.5 * p.dacMass .* d.dacCOMSpd.^2);
-d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.dacAngSpd.^2);
+%d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.dacAngSpd.^2);
+d.E_kin = interp1(t_d,KE(idx),t_a);
     
 % Interpolate position/velocity/acceleration data
 d.carp1PVA  = interp1(t_d,carp1(idx,:),t_a);
@@ -229,6 +234,7 @@ delete([p.simsPath filesep 'mVP1.mat']);
 delete([p.simsPath filesep 'springMoment.mat']);
 delete([p.simsPath filesep 'dragMoment.mat']);
 delete([p.simsPath filesep 'groundP1.mat']);
+delete([p.simsPath filesep 'KE.mat']);
 
 
 %% Update result text

@@ -237,7 +237,8 @@ carp1Kine =
    ((Velocity[Point[carpus, 1]] /. sol /. {T -> tEval})/sL * sT)[[2]],
    ((Acceleration[Point[carpus, 1]] /. sol /. {T -> tEval})/sL * sT^2)[[1]], 
    ((Acceleration[Point[carpus, 1]] /. sol /. {T -> tEval})/sL * sT^2)[[2]],
-   ((Velocity[carpus][[3]] /. sol /. {T -> tEval})* sT)
+   ((Velocity[carpus][[3]] /. sol /. {T -> tEval})* sT),
+   ((Acceleration[carpus][[3]] /. sol /. {T -> tEval})* sT)
    };
 Export[StringJoin[currPath, "/carpusP1.mat"], carp1Kine, "MAT"];
 
@@ -297,6 +298,13 @@ mV1Kine =
    Angle[mV,1] /. sol /. {T -> tEval}
    };
 Export[StringJoin[currPath, "/mVP1.mat"], mV1Kine, "MAT"];
+
+
+(* kinetic energy *)
+carpKE =
+  {((BodyEnergy[carpus] /. sol /. {T -> tEval})/sL)
+   };
+Export[StringJoin[currPath, "/KE.mat"], carpKE, "MAT"];
 
 
 (* Moment from spring *)
