@@ -1,18 +1,17 @@
 function [d,result] = run_sim(p,echoData)
 % This collects parameters values, saves them to disk for the Mathematica
 % kernel to find, runs the kernel, reads the resutls from disk, and passes
-% them to the output structure d.  Takes the following inputs:
-%
-% txtPath    - (string) Path to text file of Mathematica commands
-% kernelPath - (string) Path to the Mathematica kernel
-% currPath - (string)   Current path (stores info on current sim)
-%
+% them to the output structure d. 
+
+
+%% Default inputs
 
 result = {};
 
 if nargin < 2
     echoData = 1;
 end
+
 
 %% Check input geometry - return empty "d", if geometry not possible
 
@@ -44,57 +43,117 @@ if ~isempty(result)
     return
 end
 
-clear h_BD si h_BF gamma A B C D E F G 
+clear L
 
 
-%% Export model parameters for mathematica   
+%% Scale input parameter values for numerical stability
 
-% The order of these inputs must be consistent with 'sim_code.txt'
-data(1)  = p.L1;
-data(2)  = p.L2;
-data(3)  = p.L3;
-data(4)  = p.L4;
-data(5)  = p.L5;
-data(6)  = p.h_AF;
-data(7)  = p.gamma;
-data(8)  = 0;
-data(9)  = p.thetaStart;
-data(10) = p.dacMass;
-data(11) = p.dacI;
-data(12) = p.kSpring;
-data(13) = p.thetaRest;
-data(14) = p.simDur;
-data(15) = p.dacLen;
-data(16) = p.rho;
-data(17) = p.D;
-data(18) = p.waterI;
-data(19) = p.maxError;
+% Parameter structure 's' -- scaled version of 'p'
+global s
 
-% Save data for use by mathematica model
-save([p.simsPath filesep 'input_params.mat'],'data','-v4')
+% Scaling factors 
+sL = 1 / p.L1;
+sM = 1/p.dacMass;
+sT = 10^3;
 
-% Save time vector for evaluating results of model
-time = p.t;
-save([p.simsPath filesep 'eval_time.mat'],'time','-v4')
+% Dimensionless parameters
+s.gamma        = p.gamma;
+s.thetaStart  = p.thetaStart;
+s.thetaRest   = p.thetaRest;
+s.DrgIdx      = p.D;
+s.rel_tol     = p.rel_tol;
 
-clear time data
+% Linear dimensions
+s.L1     = p.L1 * sL;
+s.L2     = p.L2 * sL;
+s.L3     = p.L3 * sL;
+s.L4     = p.L4 * sL;
+s.L5     = p.L5 * sL;
+s.hAF    = p.h_AF * sL;
+s.dacLen = p.dacLen * sL;
+
+% Mechanical properties
+s.dMass   = p.dacMass * sM;
+s.dI      = p.dacI * sM * sL^2;
+s.waterI  = p.waterI * sM * sL^2;
+s.kSpring = p.kSpring * (sM * sL^2/sT^2);
+s.rho     = p.rho * sM / sL^3;
+
+% Time
+s.simDuration = p.simDur * sT;
 
 
-%% Run sim code with mathematica kernel
+%% Define initial geometry
 
-if echoData
-    disp(' ')
-    %disp(['Executing ' p.txtFile ' . . .'])
-    tic
+% Calculate length between B & D for range of theta
+h_BD     = sqrt(s.L1^2 + s.L2^2 - 2.*s.L1.*s.L2.*cos(s.thetaStart));
+
+% Check that linkage geometry is possible
+if h_BD > (s.L3 + s.L4)
+    error('h_BD cannot exceed L3 + L4')
+elseif h_BD < abs(s.L4-s.L3)
+    error('h_BD cannot be less than L4 - L3')       
+elseif h_BD > (s.L1 + s.L2)
+    error('h_BD cannot exceed L1 + L2')
+elseif h_BD < abs(s.L1 - s.L2)
+    error('h_BD cannot be less than L1 - L2')
 end
 
-[status,res_text] = unix([p.kernelPath ' -noprompt -run ' p.mathFile]);
+% Output angle
+phi_0 = acos((s.L3^2 + s.L4^2 - h_BD^2) / (2*s.L3*s.L4));
 
+clear h_BD
+
+
+%% Run simulation
+
+% Simulation parameters
+options    = odeset('Events',@evnts,'RelTol',s.rel_tol);
+tspan      = [0 s.simDuration];
+init_vals  = [phi_0; 0];
+
+% Intialize timer
 if echoData
-    disp(['. . . done (' num2str(toc) ' s)']);
+    tic;
 end
 
+% Run
+[t,X] = ode45(@gov_eqn,tspan,init_vals,options);
 
+% Update sim time
+if echoData
+    tlapse = toc;
+    disp(['Sim complete in ' num2str(tlapse) ' s'])
+end
+
+% Store results
+d.t    = t ./ sT;
+d.phi  = X(:,1);
+d.Dphi = X(:,2) .* sT;
+
+% Clear others
+clear t X tspan init_vals s sT sL sM
+
+
+%% Calculate result parameters
+
+% Length between B & D 
+h_BD = sqrt(p.L3^2 + p.L4^2 - 2*p.L3*p.L4.*cos(d.phi));
+
+% Input angle
+d.theta = acos((p.L1^2 + p.L2^2 - h_BD.^2) ./ (2*p.L1*p.L2));
+
+% Elastic energy
+d.E_elastic  = 0.5 .* p.kSpring .* (d.theta - p.thetaRest).^2;
+
+% Kinetic energy
+d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.Dphi.^2);
+
+
+clear h_BD
+
+
+return
 %% Load and return simulation results
 
 % Load coordinate data (nx6 matrix of 2d values for pos., vel., accel.)
@@ -222,45 +281,114 @@ d.KT        = (p.L1*p.L2)/(p.L3*p.L4) .* csc(d.thetaOut) .* ...
               sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(d.thetaOut)).^2) ...
               ./ (4*p.L1^2 *p.L2^2));
 
+          
+          
+function dX = gov_eqn(t,X)
+global s
 
-%% Delete temporary files from disk
+% Output angle of lever system
+phi  = X(1);
 
-delete([p.simsPath filesep 'input_params.mat'])
-delete([p.simsPath filesep 'eval_time.mat'])
-delete([p.simsPath filesep 'carpusP1.mat'])
-delete([p.simsPath filesep 'carpusP2.mat'])
-delete([p.simsPath filesep 'carpusP3.mat'])
-delete([p.simsPath filesep 'mVP1.mat']);
-delete([p.simsPath filesep 'springMoment.mat']);
-delete([p.simsPath filesep 'dragMoment.mat']);
-delete([p.simsPath filesep 'groundP1.mat']);
-delete([p.simsPath filesep 'KE.mat']);
+% Rate of rotation of input angle
+Dphi = X(2);
+
+% Length between B & D 
+h_BD = sqrt(s.L3^2 + s.L4^2 - 2*s.L3*s.L4*cos(phi));
+
+% Rate of change in length between B & D 
+Dh_BD = sqrt(s.L3^2 + s.L4^2 - 2.*s.L3.*s.L4.*cos(Dphi));
+
+% Input angle
+theta = acos((s.L1^2 + s.L2^2 - h_BD^2) / (2*s.L1*s.L2));
+
+% Rate of change of input angle
+Dtheta = acos((s.L1^2 + s.L2^2 - Dh_BD^2) / (2*s.L1*s.L2));
+
+% Positon vector for point b in global FOR
+B(1,1)  = s.L2 * sin(theta);
+B(1,2)  = s.L2 * cos(theta);
+
+% % Angle between links 1 and 4   
+si = acos((h_BD^2 + s.L1^2 - s.L2^2)/(2*h_BD*s.L1)) + ...
+     acos((h_BD^2 + s.L4^2 - s.L3^2)/(2*h_BD*s.L4));
+
+% Positon vector for point c in global FOR
+C(1,1)  = s.L4 * sin(si);
+C(1,2)  = s.L1 - s.L4 * cos(si);
+
+% Torque created by spring
+tau_spring = -s.kSpring*(s.thetaRest - theta);
+
+% Spring force vector created at position B
+F_B(1,1) = (tau_spring/s.L2) * cos(theta);
+F_B(1,2) = (tau_spring/s.L2) * sin(theta);
+F_B(1,3) = 0;
+%TODO: Fix this so it can handle angles above 90 deg
+
+% Position vector for lever arm
+L_B(1,1) = B(1) - C(1);
+L_B(1,2) = B(2) - C(2);
+L_B(1,3) = 0;
+
+% Torque driving the motion of the carpus
+tau_in = cross(L_B,F_B);
+
+% Collapse dimensions of the torque
+tau_in = tau_in(3);
+
+% Define output: rate of rotation
+dX(1,1) = Dphi;
+
+% Define output: rotational acceleration
+dX(2,1) = tau_in/(s.dI + s.waterI);
 
 
-%% Update result text
-result{1} = res_text;
 
 
-function data = importMathematica(filePath)
+function [value,isterminal,direction] = evnts(t,X)
 
-% Check that no "Expression" item is in the workspace
-a = whos('Expression*');
-if ~isempty(a)
-    error('Clear Expression vector in the workspace before importing')
+% Define global variables to be used
+global s
+
+% Angle of lever system
+phi  = X(1);
+
+% Rate of angular rotation of lever system
+Dphi = X(2);
+
+% Halts execution of the model
+isterminal = 1;
+
+% Length between B & D 
+h_BD = sqrt(s.L3^2 + s.L4^2 - 2*s.L3*s.L4*cos(phi));
+
+% Input angle
+theta = acos((s.L1^2 + s.L2^2 - h_BD^2) / (2*s.L1*s.L2));
+
+% Check that linkage geometry is possible
+if h_BD > (s.L3 + s.L4)
+    value = 0;
+    direction = 0;
+    warning('Sim stopped early: h_BD cannot exceed L3 + L4')
+elseif h_BD < abs(s.L4-s.L3)
+    value = 0;
+    direction = 0;
+    error('Sim stopped early: h_BD cannot be less than L4 - L3')       
+elseif h_BD > (s.L1 + s.L2)
+    value = 0;
+    direction = 0;
+    error('Sim stopped early: h_BD cannot exceed L1 + L2')
+elseif h_BD < abs(s.L1 - s.L2)
+    value = 0;
+    direction = 0;
+    error('Sim stopped early: h_BD cannot be less than L1 - L2')
+elseif (theta>=s.thetaRest)
+    value = 0;
+    direction = 0;
+else
+    value = 1;
+    direction = 1;
 end
-clear a
-
-% Load Mathematica file & redefine new "Expression" matrix
-load(filePath)
-a = whos('Expression*');
-if length(a) > 1
-    error('More than one Expression vector in the workspace')
-elseif isempty(a)
-    error('No Expression vector in the workspace')
-end
-
-eval(['data = ' a.name ';']);
-data = data';
 
 
 
