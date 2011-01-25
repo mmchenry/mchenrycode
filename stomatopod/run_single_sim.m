@@ -63,7 +63,7 @@ p.L3 = p.L3 + 0.0005;
 %dL = 1e-4;
 
 %p.D = 3*p.D;
-
+p.rel_tol = 1e-7;
 % Run simulation
 [d,result] = run_sim(p);
 

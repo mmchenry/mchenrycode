@@ -1,6 +1,9 @@
 function p = get_params(indiv,p)
 % Returns parameter values for requested individual
 
+% Relative tolerence of the simulation
+rel_tol = 1e-7;
+
 % Code for each individual
 indiv_num = [3 12 120 121 122 123 125 129 132 133 137];
 
@@ -96,7 +99,8 @@ p.kSpring = k_spring(i);
 
 p.waterI = waterI(i);
 
+p.rel_tol = rel_tol;
+
 % Density of water (kg/m^3)
 p.rho = 998;
-
 
