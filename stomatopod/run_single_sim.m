@@ -65,10 +65,9 @@ p.L3 = p.L3 + 0.0005;
 %p.D = 3*p.D;
 p.rel_tol = 1e-7;
 % Run simulation
-[d,result] = run_sim(p);
+[d,result] = run_sim(p,0);
 
 L = check_linkage(p,0,10^6);
-
 minKT = min(L.KT_all);
 
 
@@ -89,15 +88,17 @@ figure;
 % grid on
 
 subplot(2,1,1)
-E_tot = d.E_kin + d.E_drag + d.E_elastic;
-plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_drag.*1000,'b',...
-    d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
+%E_tot = d.E_kin + d.E_drag + d.E_elastic;
+E_tot = d.E_kin + d.E_elastic;
+% plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_drag.*1000,'b',...
+%     d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
+plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
 ylabel('Energy (mJ)')
 xlabel('time (ms)')
 %grid on
-legend('elastic','drag','kinetic','total','Location','West');
+legend('elastic','kinetic','total','Location','West');
 title(['min KT = ' num2str(minKT)])
-xlim([0 2])
+%xlim([0 2])
 
 % % Power graph
 % subplot(2,1,2)
