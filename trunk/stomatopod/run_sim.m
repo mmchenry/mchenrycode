@@ -57,7 +57,7 @@ sM = 1/p.dacMass;
 sT = 10^3;
 
 % Dimensionless parameters
-s.gamma        = p.gamma;
+s.gamma       = p.gamma;
 s.thetaStart  = p.thetaStart;
 s.thetaRest   = p.thetaRest;
 s.DrgIdx      = p.D;
@@ -83,7 +83,7 @@ s.rho     = p.rho * sM / sL^3;
 s.simDuration = p.simDur * sT;
 
 
-%% Define initial geometry
+%% Define initial ouput angle
 
 % Calculate length between B & D for range of theta
 h_BD     = sqrt(s.L1^2 + s.L2^2 - 2.*s.L1.*s.L2.*cos(s.thetaStart));
@@ -137,149 +137,31 @@ clear t X tspan init_vals s sT sL sM
 
 %% Calculate result parameters
 
-% Length between B & D 
+% Length between points b & d 
 h_BD = sqrt(p.L3^2 + p.L4^2 - 2*p.L3*p.L4.*cos(d.phi));
 
 % Input angle
 d.theta = acos((p.L1^2 + p.L2^2 - h_BD.^2) ./ (2*p.L1*p.L2));
 
+% Kinematic transmission
+d.KT = (p.L1*p.L2)/(p.L3*p.L4) .* csc(d.phi) .* ...
+       sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(d.phi)).^2) ...
+       ./ (4*p.L1^2 *p.L2^2));
+   
+% Spring torque
+d.tau_spring = -p.kSpring*(p.thetaRest - d.theta);
+
 % Elastic energy
-d.E_elastic  = 0.5 .* p.kSpring .* (d.theta - p.thetaRest).^2;
+d.E_elastic  = 0.5 .* p.kSpring .* (p.thetaRest - d.theta ).^2;
 
 % Kinetic energy
-d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.Dphi.^2);
-
-
-clear h_BD
-
-
-return
-%% Load and return simulation results
-
-% Load coordinate data (nx6 matrix of 2d values for pos., vel., accel.)
-carp1   = importMathematica([p.simsPath filesep 'carpusP1.mat']);
-carp2   = importMathematica([p.simsPath filesep 'carpusP2.mat']);
-dac     = importMathematica([p.simsPath filesep 'carpusP3.mat']);
-mV      = importMathematica([p.simsPath filesep 'mVP1.mat']);
-gnd     = importMathematica([p.simsPath filesep 'groundP1.mat']);
-
-% Load angular data
-%mV_ang  = importMathematica([p.simsPath filesep 'mvAng.mat']);
-%dac_ang = importMathematica([p.simsPath filesep 'dacAng.mat']);
-
-% Load torque data
-springTau = importMathematica([p.simsPath filesep 'springMoment.mat']);
-dragTau   = importMathematica([p.simsPath filesep 'dragMoment.mat']);
-KE        = importMathematica([p.simsPath filesep 'KE.mat']);
-
-% Calculate mV angular position
-mVAng  = mV(:,7);
-
-% Calculate input angle
-thetaIn  = pi/2 - mVAng;
-
-% Calculate output angle
-h_BD  = sqrt(p.L1^2 + p.L2^2 - 2*p.L1*p.L2*cos(thetaIn));
-thetaOut = real(acos((p.L3^2+p.L4^2-h_BD.^2)./(2*p.L3*p.L4)));
-
-dacAng = unwrap(atan2(dac(:,2)-carp2(:,2),dac(:,1)-carp2(:,1)));
-
-% % Trim data beyond where output angle approaches maximum range of motion
-% if max(thetaOut > 0.97*L.thetaOutMax) > 0
-%     idx = 1:find(thetaOut > 0.97*L.thetaOutMax,1);
-% else
-%     idx = 1:length(thetaOut);
-% end
-
-% % Trim data beyond where output angles are possible
-% if max(thetaOut > 0.97*L.thetaOutMax) > 0
-%     idx = 1:find(thetaOut > 0.97*L.thetaOutMax,1);
-% else
-%     idx = 1:length(thetaOut);
-% end
-
-idx = 1:length(thetaIn);
-
-% Trim data beyond where input angle = resting angle
-if max(thetaIn) > p.thetaRest
-    idx = 1:find(thetaIn > p.thetaRest,1,'first')+1;
-else   
-    warning('Theta-in never reaches resting angle')
-end
-
-% Trim data beyond where output angle > pi
-if max(thetaOut>0.95*pi)
-    
-    iHyper = find(thetaOut>0.95*pi,1,'first');
-    
-    if iHyper < length(idx)
-        idx = 1:iHyper;
-    end
-    
-    clear iHyper
-end
-
-% Define time vectors
-t_d = [p.t(idx)]';
-t_v = t_d(1:end-1,1);
-t_a = t_d(2:end-1,1);
-
-% Store time vector for results
-d.t = t_a;
-
-% Calculate angular velocity
-%dacAngSpd = diff(dacAng(idx))./diff(t_d);
-dacAngSpd   = carp1(idx,7);
-dacAngAccel = carp1(idx,8);
-
-% Calculate dactyl speed
-dacCOMSpd      = sqrt(diff(dac(idx,1)).^2 + diff(dac(idx,2)).^2)./diff(t_d);
-dacBaseSpd     = sqrt(diff(carp2(idx,1)).^2 + diff(carp2(idx,2)).^2)./diff(t_d);
-
-%d.mVAngVel      = diff(d.mVAng)./diff(t_d);
-%d.mVAngAccel    = diff(d.mVAngVel)./diff(t_v);
-
-% Interpolate angular data
-d.thetaIn   = interp1(t_d,thetaIn(idx),t_a);
-d.thetaOut  = interp1(t_d,thetaOut(idx),t_a);
-
-% Interpolate speed data
-d.dacAngSpd   = interp1(t_v,dacAngSpd(idx(1:end-1)),t_a);
-d.dacAngAccel = interp1(t_v,dacAngAccel(idx(1:end-1)),t_a);
-d.dacCOMSpd   = interp1(t_v,dacCOMSpd(idx(1:end-1)),t_a);
-d.dacBaseSpd  = interp1(t_v,dacBaseSpd(idx(1:end-1)),t_a);
-
-% Interpolate torque data
-d.springTau   = interp1(t_d,springTau(idx),t_a);
-d.dragTau     = interp1(t_d,dragTau(idx),t_a);
-
-% Angular momentum
-d.dacAngMomentum = (p.dacI+p.waterI) .* d.dacAngSpd;
-
-% Linear momentum
-d.dacLinMomentum = p.dacMass .* d.dacCOMSpd;
-
-% Calculate elastic energy (assumes negative displacement of mV)
-%d.E_elastic  = abs(0.5 .* d.springTau .* (d.thetaIn-p.thetaRest));
-d.E_elastic  = 0.5 .* p.kSpring .* (d.thetaIn-p.thetaRest).^2;
+d.E_kin = 0.5 * (p.dacI+p.waterI) .* d.Dphi.^2;
 
 % Calculate drag energy
-d.E_drag = cumtrapz(abs(d.thetaOut(1)-d.thetaOut),abs(d.dragTau));
+%d.E_drag = cumtrapz(abs(d.phi(1)-d.phi),abs(d.dragTau));
+   
 
-% Calculate kinetic energy
-%d.E_kin = (0.5 * p.dacMass .* d.dacCOMSpd.^2);
-%d.E_kin = (0.5 * (p.dacI+p.waterI) .* d.dacAngSpd.^2);
-d.E_kin = interp1(t_d,KE(idx),t_a);
-    
-% Interpolate position/velocity/acceleration data
-d.carp1PVA  = interp1(t_d,carp1(idx,:),t_a);
-d.carp2PVA  = interp1(t_d,carp2(idx,:),t_a);
-d.dacPVA    = interp1(t_d,dac(idx,:),t_a);
-d.mVPVA     = interp1(t_d,mV(idx,:),t_a);
-d.gndPVA    = gnd;
-d.KT        = (p.L1*p.L2)/(p.L3*p.L4) .* csc(d.thetaOut) .* ...
-              sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(d.thetaOut)).^2) ...
-              ./ (4*p.L1^2 *p.L2^2));
+
 
           
           
@@ -319,21 +201,24 @@ C(1,2)  = s.L1 - s.L4 * cos(si);
 % Torque created by spring
 tau_spring = -s.kSpring*(s.thetaRest - theta);
 
+% Unit vector for force (perpendicular to link 2)
+F_unit(1,1) = B(2) ./ sqrt(B(1)^2 + B(2)^2);
+F_unit(1,2) = -B(1)./ sqrt(B(1)^2 + B(2)^2);
+
 % Spring force vector created at position B
-F_B(1,1) = (tau_spring/s.L2) * cos(theta);
-F_B(1,2) = (tau_spring/s.L2) * sin(theta);
+F_B(1,1) = (tau_spring/s.L2) * F_unit(1);
+F_B(1,2) = (tau_spring/s.L2) * F_unit(2);
 F_B(1,3) = 0;
-%TODO: Fix this so it can handle angles above 90 deg
 
 % Position vector for lever arm
-L_B(1,1) = B(1) - C(1);
-L_B(1,2) = B(2) - C(2);
+L_B(1,1) = C(1) - B(1);
+L_B(1,2) = C(2) - B(2);
 L_B(1,3) = 0;
 
 % Torque driving the motion of the carpus
 tau_in = cross(L_B,F_B);
 
-% Collapse dimensions of the torque
+% Collapse dimensions of the torque vector
 tau_in = tau_in(3);
 
 % Define output: rate of rotation
@@ -341,8 +226,6 @@ dX(1,1) = Dphi;
 
 % Define output: rotational acceleration
 dX(2,1) = tau_in/(s.dI + s.waterI);
-
-
 
 
 function [value,isterminal,direction] = evnts(t,X)
@@ -373,15 +256,15 @@ if h_BD > (s.L3 + s.L4)
 elseif h_BD < abs(s.L4-s.L3)
     value = 0;
     direction = 0;
-    error('Sim stopped early: h_BD cannot be less than L4 - L3')       
+    warning('Sim stopped early: h_BD cannot be less than L4 - L3')       
 elseif h_BD > (s.L1 + s.L2)
     value = 0;
     direction = 0;
-    error('Sim stopped early: h_BD cannot exceed L1 + L2')
+    warning('Sim stopped early: h_BD cannot exceed L1 + L2')
 elseif h_BD < abs(s.L1 - s.L2)
     value = 0;
     direction = 0;
-    error('Sim stopped early: h_BD cannot be less than L1 - L2')
+    warning('Sim stopped early: h_BD cannot be less than L1 - L2')
 elseif (theta>=s.thetaRest)
     value = 0;
     direction = 0;
