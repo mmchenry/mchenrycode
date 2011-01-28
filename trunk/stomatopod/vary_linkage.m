@@ -88,14 +88,14 @@ for i = 1:length(L3s)
     dD = run_sim(p,echoData);
     
     % Find index where max velocity is reached
-    idx = find(dD.dacAngSpd == max(dD.dacAngSpd));
+    idx = find(dD.Dgamma == max(dD.Dgamma));
     
     % Store results
     rD.L3(i)         = p.L3;
-    rD.alpha(i)      = max(dD.dacAngSpd);
+    rD.gamma(i)      = max(dD.Dgamma);
     rD.E_drag(i)     = max(dD.E_drag);
-    rD.theta_max(i)  = dD.thetaOut(idx)-dD.thetaOut(1);
-    rD.t_peak(i)     = dD.t(dD.dacAngSpd==max(dD.dacAngSpd));
+    rD.theta_max(i)  = dD.gamma(idx)-dD.gamma(1);
+    rD.t_peak(i)     = dD.t(dD.Dgamma==max(dD.Dgamma));
     rD.KT_min(i)     = min(dD.KT);
     
     % Run the model without drag
@@ -103,14 +103,14 @@ for i = 1:length(L3s)
     dN = run_sim(p,echoData);
     
     % Find index where max velocity is reached
-    idx = find(dD.dacAngSpd == max(dD.dacAngSpd));
+    idx = find(dD.Dgamma == max(dD.Dgamma));
     
     % Store results
     rN.L3(i)         = p.L3;
-    rN.alpha(i)      = max(dN.dacAngSpd);
+    rN.gamma(i)      = max(dN.Dgamma);
     
-    rN.theta_max(i)  = dN.thetaOut(idx)-dN.thetaOut(1);
-    rN.t_peak(i)     = dD.t(dN.dacAngSpd==max(dN.dacAngSpd));
+    rN.theta_max(i)  = dN.gamma(idx)-dN.gamma(1);
+    rN.t_peak(i)     = dD.t(dN.Dgamma==max(dN.Dgamma));
     rN.KT_min(i)     = min(dN.KT);
 
     rN.al_pred(i)     = sqrt(p.kSpring./((p.dacI+p.waterI))) * ...
@@ -133,8 +133,8 @@ xlabel('L3')
 axis square
 
 subplot(2,1,2)
-plot(1000.*rD.L3,rD.alpha.*(180/pi)./1000,'o-',...
-     1000.*rN.L3,rN.alpha.*(180/pi)./1000,'ro-',...
+plot(1000.*rD.L3,rD.gamma.*(180/pi)./1000,'o-',...
+     1000.*rN.L3,rN.gamma.*(180/pi)./1000,'ro-',...
      1000.*rN.L3,rN.al_pred.*(180/pi)./1000,'k-')
 ylabel('max ang speed (deg/s)')
 xlabel('L3')
@@ -161,8 +161,8 @@ xlabel('L3')
 axis square
 
 subplot(3,1,3)
-plot(rD.L3,rD.alpha.*(180/pi),'o-',...
-     rN.L3,rN.alpha.*(180/pi),'ro-')
+plot(rD.L3,rD.gamma.*(180/pi),'o-',...
+     rN.L3,rN.gamma.*(180/pi),'ro-')
 ylabel('max ang speed (deg/s)')
 xlabel('L3')
 axis square
