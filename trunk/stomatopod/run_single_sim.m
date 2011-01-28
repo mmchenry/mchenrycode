@@ -55,7 +55,7 @@ p.rho = 998;
 p = get_params(indiv,p);
 
 % Knock out drag
-p.D = 0;
+%p.D = 0;
 
 %p.L3 = p.L3 + 0.0005;
 %p.waterI = 0;
@@ -88,15 +88,15 @@ grid on
 % grid on
 
 subplot(2,1,2)
-%E_tot = d.E_kin + d.E_drag + d.E_elastic;
-E_tot = d.E_kin + d.E_elastic;
-% plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_drag.*1000,'b',...
-%     d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
-plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
+E_tot = d.E_kin + d.E_drag + d.E_elastic;
+%E_tot = d.E_kin + d.E_elastic;
+plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_drag.*1000,'b',...
+    d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
+%plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_kin.*1000,'g',d.t.*1000,E_tot.*1000,'k--')
 ylabel('Energy (mJ)')
 xlabel('time (ms)')
 %grid on
-legend('elastic','kinetic','total','Location','West');
+legend('elastic','drag','kinetic','total','Location','West');
 title(['min KT = ' num2str(minKT)])
 %xlim([0 2])
 
