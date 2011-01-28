@@ -8,17 +8,17 @@ indiv = 120;
 
 %% Path definitions (computer specific)
 
-% Path to text file of Mathematica commands
-p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
-
-% Path to the Mathematica kernel
-p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
-
-% Root path for simulation data
-p.simsPath = '/Volumes/data_commuter/Projects/Patek_project/sims';
-
-% Path to force data
-forcePath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
+% % Path to text file of Mathematica commands
+% p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
+% 
+% % Path to the Mathematica kernel
+% p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
+% 
+% % Root path for simulation data
+% p.simsPath = '/Volumes/data_commuter/Projects/Patek_project/sims';
+% 
+% % Path to force data
+% forcePath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
 
 
 %% Simulation parameters
@@ -57,7 +57,7 @@ p = get_params(indiv,p);
 % Knock out drag
 p.D = 0;
 
-p.L3 = p.L3 + 0.0005;
+%p.L3 = p.L3 + 0.0005;
 %p.waterI = 0;
 
 %dL = 1e-4;
@@ -74,12 +74,12 @@ minKT = min(L.KT_all);
 %% Visualize simulation results
 figure;
 
-% subplot(3,1,1)
-% plot(d.t.*1000,d.thetaIn.*180/pi,'r',d.t.*1000,d.thetaOut*180/pi,'b')
-% legend('in ','out','Location','NorthWest');
-% ylabel('angle (deg)')
-% xlabel('time (ms)')
-% grid on
+subplot(2,1,1)
+plot(d.t.*1000,d.theta.*180/pi,'r',d.t.*1000,-(d.gamma)*180/pi,'b')
+legend('in ','out','Location','NorthWest');
+ylabel('angle (deg)')
+xlabel('time (ms)')
+grid on
 % 
 % subplot(3,1,2)
 % plot(d.t.*1000,(d.dacAngSpd.*180/pi)./1000)
@@ -87,7 +87,7 @@ figure;
 % xlabel('time (ms)')
 % grid on
 
-subplot(2,1,1)
+subplot(2,1,2)
 %E_tot = d.E_kin + d.E_drag + d.E_elastic;
 E_tot = d.E_kin + d.E_elastic;
 % plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_drag.*1000,'b',...
@@ -112,6 +112,21 @@ title(['min KT = ' num2str(minKT)])
 
 clear E_tot
 
+
+return
+%% Animate results
+
+f = figure;
+set(f,'DoubleBuffer','on');
+pause(.1)
+for i = 1:size(d.A,1)
+    h = plot([d.A(i,1) d.B(i,1)],[d.A(i,2) d.B(i,2)],'b-',...
+        [d.C(i,1) d.B(i,1)],[d.C(i,2) d.B(i,2)],'b-',...
+        [d.C(i,1) d.D(i,1)],[d.C(i,2) d.D(i,2)],'b-');
+    xlim([0 6e-3])
+    axis equal
+    pause
+end
 
 
 %TODO: calc amd compare momentum values
