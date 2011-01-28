@@ -41,8 +41,6 @@ L3_max = p.L3 + 10e-4;
 
 
 
-
-
 %% General parameter values
 % Fixed for all individuals
 

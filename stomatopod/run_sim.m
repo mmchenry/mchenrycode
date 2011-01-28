@@ -71,8 +71,8 @@ s.L4     = p.L4 * sL;
 s.L5     = p.L5 * sL;
 s.hAF    = p.h_AF * sL;
 s.dacLen = p.dacLen * sL;
-Lout = (sqrt((p.dacI)/p.dacMass));
-s.Lout   = Lout * sL;
+%Lout = (sqrt((p.dacI)/p.dacMass));
+%s.Lout   = Lout * sL;
 
 % Mechanical properties
 s.dMass   = p.dacMass * sM;
@@ -182,23 +182,28 @@ d.D = [zeros(length(d.t),1) p.L1.*ones(length(d.t),1)];
 %        sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(d.phi)).^2) ...
 %        ./ (4*p.L1^2 *p.L2^2));
  
+KT = calc_KT(d.gamma,p.L1,p.L2,p.L3,p.L4);
 % Calculate KT for all t using a 5th-order polynomial
 coef = polyfit(d.theta,d.gamma,5);
-d.KT = polyval(coef,d.theta);
+d.KT = polyval(polyder(coef,1),d.theta);
 
 % Spring torque
 d.tau_spring = -p.kSpring*(p.thetaRest - d.theta);
+
+% Drag torque
+d.tau_drag = -0.5*p.rho.*d.Dgamma.^2 .* p.dacLen^5 .* p.D  .* ... 
+             d.Dgamma./abs(10^-20 + d.Dgamma);
 
 % Elastic energy
 d.E_elastic  = 0.5 .* p.kSpring .* (p.thetaRest - d.theta ).^2;
 
 % Kinetic energy
-d.E_kin = 0.5 * (p.dacI) .* d.Dgamma.^2;
+d.E_kin = 0.5 * (p.dacI+p.waterI) .* d.Dgamma.^2;
 %d.E_kin = [0; 0.5 * (p.dacI+p.waterI) .* (diff(d.eta)./diff(d.t)).^2];
 
 % Calculate drag energy
-%d.E_drag = cumtrapz(abs(d.phi(1)-d.phi),abs(d.dragTau));
-d.E_drag = zeros(size(d.t,1),size(d.t,2));   
+d.E_drag = cumtrapz(abs(d.gamma-d.gamma(1)),abs(d.tau_drag));
+%d.E_drag = zeros(size(d.t,1),size(d.t,2));   
 
 
 
@@ -216,50 +221,24 @@ Dgamma = X(2);
 % Calculate theta for current gamma
 theta = calc_theta(gamma,s.L1,s.L2,s.L3,s.L4);
 
-% Length between points b & d 
-h_BD = sqrt(s.L1^2 + s.L2^2 - 2*s.L1*s.L2.*cos(theta));
-
-% Angle btwn links 1 & 4
-si = acos((h_BD.^2 + s.L1^2 - s.L2^2)./(2*h_BD.*s.L1)) + ...
-     acos((h_BD.^2 + s.L4^2 - s.L3^2)./(2*h_BD.*s.L4));
-   
-% Position vector for point B
-B = [s.L2.*sin(theta) s.L2.*cos(theta)];
-
-% Position vector for point C
-C = [s.L4.*sin(si) s.L1-s.L4.*cos(si)];
+% KT
+KT = calc_KT(gamma,s.L1,s.L2,s.L3,s.L4);
 
 % Torque created by spring
 tau_spring = -s.kSpring*(s.thetaRest - theta);
 
-% Unit vector for input force at B (perpendicular to link 2)
-F_unit(1,1) =  B(2)./ sqrt(B(1)^2 + B(2)^2);
-F_unit(1,2) = -B(1)./ sqrt(B(1)^2 + B(2)^2);
-
-% Spring force vector created at position B
-F_B(1,1) = (tau_spring/s.L2) * F_unit(1);
-F_B(1,2) = (tau_spring/s.L2) * F_unit(2);
-F_B(1,3) = 0;
-
-% Position vector for in-lever arm
-L_B(1,1) = C(1) - B(1);
-L_B(1,2) = C(2) - B(2);
-L_B(1,3) = 0;
-
-dacI = (s.dMass .* (s.Lout)^2);
-
-% Torque driving the motion of the carpus
-tau_in = cross(L_B,F_B);
-
-% Collapse dimensions of the torque vector
-tau_in = tau_in(3);
+% Torque created by drag
+tau_drag = -0.5*s.rho.*Dgamma.^2 .* (s.dacLen^5) .* s.DrgIdx  .* ... 
+             Dgamma./abs(10^-20 + Dgamma);
+         
+% Input torque
+tau_in = - (tau_spring./KT);
 
 % Define output: rate of rotation
 dX(1,1) = Dgamma;
 
 % Define output: rotational acceleration
-dX(2,1) = tau_in/(s.dacI);
-
+dX(2,1) = (tau_in + tau_drag) ./ (s.dacI+s.waterI);
 
 
 function [value,isterminal,direction] = evnts(t,X)
@@ -312,6 +291,8 @@ end
 
 
 function theta = calc_theta(gamma,L1,L2,L3,L4)
+% Calculate theta for a given gamma for a particular 4-bar linkage
+
 theta = acos((L1.^3.*L2 + L1.*L2.^3 + 2.*L1.*L2.*L3.^2 - L1.*L2.*L4.^2 - ... 
         L2.*L3.*(3.*L1.^2 + L2.^2 + L3.^2 - L4.^2).*cos(gamma) + ...
         L1.*L2.*L3.^2.*cos(2.*gamma) + ...
@@ -321,4 +302,44 @@ theta = acos((L1.^3.*L2 + L1.*L2.^3 + 2.*L1.*L2.*L3.^2 - L1.*L2.*L4.^2 - ...
          4.*L1.*L3.*(L1.^2 - L2.^2 + L3.^2 - L4.^2).*cos(gamma) + ... 
          2.*L1.^2.*L3.^2.*cos(2.*gamma)).*sin(gamma).^2))./ ...
          (2.*L2.^2.*(L1.^2 + L3.^2 - 2.*L1.*L3.*cos(gamma))));
-     %theta = pi/2-theta;
+     
+     
+function KT = calc_KT(gamma,L1,L2,L3,L4)
+% Ratio of output angle to input angle (Dgamma/Dtheta) for a given gamma
+% and four-bar geometry
+
+KT = ...
+1 ./ (-(-2*L1*L3.* sin(gamma) .*...
+(L1^3*L2 + L1*L2^3 + 2*L1*L2*L3^2 - L1*L2*L4^2 - ... 
+ L2*L3.*(3*L1^2 + L2^2 + L3^2 - L4^2) .* cos(gamma) + ... 
+ L1*L2*L3^2 .* cos(2.*gamma) + sqrt(-L2^2 * L3^2 * ...
+ (L1^4 - 2*L1^2*L2^2 + L2^4 + 4*L1^2*L3^2 - ...
+  2*L2^2*L3^2 + L3^4 - 2*L1^2*L4^2 - 2*L2^2*L4^2 - ...
+  2*L3^2*L4^2 + L4^4 - 4*L1*L3*(L1^2 - L2^2 + L3^2 - L4^2) .* ...
+  cos(gamma) + 2*L1^2*L3^2 .* cos(2.*gamma)) .* sin(gamma).^2)) + ...
+  L2*L3*(L1^2 + L3^2 - 2*L1*L3 .* cos(gamma)) .* ...
+  ((3*L1^2 + L2^2 + L3^2 - L4^2) .* sin(gamma) - ...
+  (L2*L3.*((L1^4 + L2^4 + (L3^2 - L4^2)^2 - ... 
+   2*L1^2*(L2^2 - 2*L3^2 + L4^2) - ...
+   2*L2^2*(L3^2 + L4^2)) .* cos(gamma) + ...
+   L1*L3*(-L1^2 + L2^2 - L3^2 + L4^2 - ...
+   3*(L1^2 - L2^2 + L3^2 - L4^2) .* cos(2.*gamma) + ... 
+   2*L1*L3.* cos(3.*gamma))) .* sin(gamma)) ...
+   ./(sqrt(-L2^2*L3^2 .* (L1^4 - 2*L1^2*L2^2 + L2^4 + ... 
+      4*L1^2*L3^2 - 2*L2^2*L3^2 + L3^4 - 2*L1^2*L4^2 - ... 
+      2*L2^2*L4^2 - 2*L3^2*L4^2 + L4^4 - ... 
+      4*L1*L3.*(L1^2 - L2^2 + L3^2 - L4^2) .* cos(gamma) + ... 
+      2*L1^2*L3^2 .* cos(2.*gamma)) .* sin(gamma).^2)) - ...
+      2*L1*L3 .* sin(2.*gamma))) ./ (2*L2^2 .* (L1^2 + L3^2 - ... 
+      2*L1*L3 .* cos(gamma)).^2 .* ...
+      sqrt(1 - (L1^3*L2 + L1*L2^3 + 2*L1*L2.* L3^2 - ... 
+          L1*L2*L4^2 - L2*L3*(3*L1^2 + L2^2 + L3^2 - L4^2) .* ...
+          cos(gamma) + L1*L2*L3^2 .* cos(2.*gamma) + ...
+          sqrt(-L2^2*L3^2*(L1^4 - 2*L1^2*L2^2 + ...
+                 L2^4 + 4*L1^2*L3^2 - 2*L2^2*L3^2 + L3^4 - ... 
+                 2*L1^2*L4^2 - 2*L2^2*L4^2 - 2*L3^2*L4^2 + ...
+                 L4^4 - 4*L1*L3 * (L1^2 - L2^2 + L3^2 - L4^2) .* ...
+                 cos(gamma) + 2*L1^2*L3^2 .* cos(2.*gamma)) .* ...
+                 sin(gamma).^2)).^2 ./ (4*L2^4 * ...
+                 (L1^2 + L3^2 - 2*L1*L3.* cos(gamma)).^2))));
+             
