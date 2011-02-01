@@ -27,6 +27,11 @@ duration = 0.25;
 % Period over which to visualize the signal (s)
 prd = 30;
 
+% Whether to save a movie file
+save_mov = 1;
+
+play_rate = 5;
+
 
 %% Get path of data file, load data
 
@@ -77,6 +82,7 @@ f = figure;
 set(f,'DoubleBuffer','on')
 %set(f,'WindowStyle','docked')
 set(f,'WindowStyle','normal')
+set(f,'Position',[1 winSize winSize winSize])
 %set(f,'WindowStyle','modal')
 
 %% Process pixel data
@@ -101,11 +107,13 @@ yVals = ylim;
 
 %% Loop through frames
 
-% Initialize movie file
-if ispc
-    aviobj = avifile([pName filesep 'data_movie'],'compression','Cinepak');
-else
-    aviobj = avifile([pName filesep 'data_movie'],'compression','None');
+if save_mov
+    % Initialize movie file
+    if ispc
+        aviobj = avifile([pName filesep 'data_movie'],'compression','Cinepak');
+    else
+        aviobj = avifile([pName filesep 'data_movie'],'compression','None');
+    end
 end
 
 for i = 1:frame_skip:duration*length(dM.frameNum)
@@ -130,7 +138,9 @@ for i = 1:frame_skip:duration*length(dM.frameNum)
       
     % Mark current time on graph
     figure(f)
-    set(f,'Position',[1 winSize winSize winSize])
+    if save_mov
+        set(f,'Position',[1 winSize winSize winSize])
+    end
     subplot(3,2,5:6)
     h1 = plot([tc tc],yVals,'k-');
     xlim([tc-prd/4 tc+3*prd/4])
@@ -165,14 +175,16 @@ for i = 1:frame_skip:duration*length(dM.frameNum)
     set(h,'Color','b')
     axis([min(dP.xROI{i}) max(dP.xROI{i}) ...
           min(dP.yROI{i}) max(dP.yROI{i})])
-    
-    %         % Pause, then proceed
-    %         elTime = toc;
-    %         delay = max([0 (1/play_rate)-elTime]);
-    %         pause(delay)
-    
-    Fr = getframe(f);
-    aviobj = addframe(aviobj,Fr);
+
+    if save_mov
+        Fr = getframe(f);
+        aviobj = addframe(aviobj,Fr);
+    else
+        % Pause, then proceed
+        elTime = toc;
+        delay = max([.001 (1/play_rate)-elTime]);
+        pause(delay)
+    end
     
     % Delete line
     delete(h1)
@@ -182,9 +194,10 @@ for i = 1:frame_skip:duration*length(dM.frameNum)
     
 end
 
-close(f);
-aviobj = close(aviobj);
-
+if save_mov
+    close(f);
+    aviobj = close(aviobj);
+end
 
 function data_filtered = butter_filt(data,sample_rate,cut_freq,type) 
 % High-pass or low-pass butterworth filter
