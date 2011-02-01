@@ -19,14 +19,14 @@ pauseDur = 0.002;
 
 %% Get path of data file, load data
 
-% if nargin < 1
-%     [tmp,pName] = uigetfile(fName,'Select data file');
-%     clear tmp
-% end
+if nargin < 1
+    [tmp,pName] = uigetfile(fName,'Select data file');
+    clear tmp
+end
 
 %pName = '/Volumes/Docs/Projects/spiracles/sample sequence/29-6-10 video3';
 %pName = 'C:\Users\Guest\Documents\spir\recordings\R006-sp003-r001-29-Jul-2010\pike';
-pName = '/Volumes/data_commuter/Projects/Roaches/R005-sp005-r001-29-Jul-2010/pike';
+%pName = '/Volumes/data_commuter/Projects/Roaches/R005-sp005-r001-29-Jul-2010/pike';
 
 
 load([pName filesep fName])

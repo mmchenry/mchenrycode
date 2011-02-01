@@ -322,6 +322,9 @@ if isempty(a)
                 cP = -cP;
             elseif strcmp(p.invert,'marlin')
                 cM = -cM;
+            elseif strcmp(p.invert,'both')
+                cM = -cM;
+                cP = -cP;
             end
                 
             
@@ -400,6 +403,9 @@ if isempty(a)
         elseif strcmp(p.invert,'pike')
             P_in = -1;
             M_in = 1;
+        elseif strcmp(p.invert,'both')
+            P_in = -1;
+            M_in = -1;
         else
             M_in = 1;
             P_in = 1;
@@ -470,7 +476,7 @@ if isempty(a)
                 prompt = {'Interrogation interval (s)',...
                     'Marlin smoothing tolerance (larger = smoother)',...
                     'Pike smoothing tolerance (larger = smoother)',...
-                    'Invert? ("no","pike","marlin")'};
+                    'Invert? ("no","pike","marlin","both")'};
                 
                 answer = inputdlg(prompt,'Parameters',1,...
                          {num2str(p.anaDur),...
@@ -482,7 +488,8 @@ if isempty(a)
                 
                 % Check/set invert input
                 if ~strcmp(answer{4},'no') && ~strcmp(answer{4},'pike')...
-                        && ~strcmp(answer{4},'marlin')
+                        && ~strcmp(answer{4},'marlin')...
+                        && ~strcmp(answer{4},'both')
                     warning('invalid entry for "invert", setting to "no"')
                     p.invert = 'no';
                 else
@@ -594,7 +601,7 @@ subplot(numPanels,1,5:6)
 a2 = dir([pName filesep 'include_in_pool.mat']);
 a3 = dir([pName filesep 'exclude_from_pool.mat']);
 
-if isempty(a2) || isempty(a3)
+if isempty(a2) && isempty(a3)
     
     but = questdlg('How do the data look ?','',...
         'Great!','Re-run analysis',...
@@ -606,6 +613,22 @@ if isempty(a2) || isempty(a3)
     elseif strcmp(but,'Great!')
         include_in_pool = 1;
         save([pName filesep 'include_in_pool.mat'],'include_in_pool');
+        
+        but2 = questdlg('Are the periods the same for the two spiracles',...
+                        '','Yes','No','Yes');
+        if isempty(but2)
+            return
+            
+        elseif strcmp(but2,'No')
+            save([pName filesep 'unequal_periods.mat'],'include_in_pool');
+            
+        else 
+            save([pName filesep 'equal_periods.mat'],'include_in_pool');
+            
+        end
+        
+        clear but2
+            
         
     elseif strcmp(but,'Re-run analysis')
         close
@@ -623,6 +646,8 @@ if isempty(a2) || isempty(a3)
     clear but
     
 end
+
+
 
 
 
