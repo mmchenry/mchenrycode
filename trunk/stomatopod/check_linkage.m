@@ -2,6 +2,7 @@ function L = check_linkage(p,visData,numVals)
 % Evaluates whether the requested geometry is possible and what its limits
 % are in range of motion
 
+% Set default values
 if nargin < 3
     numVals = 1000;
     if nargin < 2
@@ -9,16 +10,16 @@ if nargin < 3
     end
 end
 
-% Define full range of possible values for thetaOut
-thetaIn = linspace(0,pi,numVals);
+% Define full range of possible values for gamma
+theta = linspace(0,pi,numVals)';
 
 % Calculate length between B & D for range of theta
-h_BD     = sqrt(p.L1^2 + p.L2^2 - 2.*p.L1.*p.L2.*cos(thetaIn));
+h_BD     = sqrt(p.L1^2 + p.L2^2 - 2.*p.L1.*p.L2.*cos(theta));
 
 % Calculate length between B & D for initial theta
 h_BD0     = sqrt(p.L1^2 + p.L2^2 - 2.*p.L1.*p.L2.*cos(p.thetaStart));
 
-% Check range of possible thetaOut
+% Check range of possible gamma
 idx  = (h_BD < (p.L3 + p.L4)) & ...
        (h_BD > abs(p.L4-p.L3)) & ...
        (h_BD < (p.L1 + p.L2)) & ...
@@ -37,55 +38,60 @@ elseif ~(  (p.L4 < (p.L3+h_BD0)) || (p.L4 > (h_BD0-p.L3))  )
 end
 
 % Trim impossible range of motion values
-thetaIn = thetaIn(idx);
-h_BD     = h_BD(idx);
+theta = theta(idx);
+h_BD  = h_BD(idx);
 
 clear idx
 
-% Calculate possible thetaOut values
-thetaOut  = acos( (p.L3.^2 + p.L4.^2 - h_BD.^2) ./ (2.*p.L3.*p.L4) );
+% phi - the angle between links 3 and 4
+phi  = acos( (p.L3.^2 + p.L4.^2 - h_BD.^2) ./ (2.*p.L3.*p.L4) );
 
-% Output range of motion
-outROM = max(thetaOut) - min(thetaOut);
+% si - the angle between links 1 and 4
+si = acos((h_BD.^2 + p.L1^2 - p.L2^2)./(2*h_BD.*p.L1)) + ...
+       acos((h_BD.^2 + p.L4^2 - p.L3^2)./(2*h_BD.*p.L4));
 
-% Calculate KT.  Found by evaluating at the first derivative of 
-% dInput / dOutput for output = pi/2.
-KT_single = (p.L1*p.L2* ...
-      sqrt(1 - (p.L1^2+p.L2^2-p.L3^2-p.L4^2)^2/(4*p.L1^2*p.L2^2))) ...
-      / (p.L3 * p.L4);
+% Positions of points
+A = zeros(length(theta),2);
+B = [p.L2.*sin(theta) p.L2.*cos(theta)];
+C = [p.L4.*sin(si) p.L1-p.L4.*cos(si)];
+D = [zeros(length(theta),1) p.L1.*ones(length(theta),1)];
 
-% KT_all = (p.L1*p.L2)/(p.L3*p.L4) .* csc(thetaOut) .* ...
-%          sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(thetaOut)).^2) ...
-%          ./ (4*p.L1^2 *p.L2^2));
+%gamma = pi - atan2((B(:,2)-C(:,2)),-(B(:,1)-C(:,1)));
 
-KT_all = (p.L1*p.L2)/(p.L3*p.L4) .* sin(thetaIn) ./ ...
-         sqrt(1-((-p.L1^2-p.L2^2+p.L3^2+p.L4^2+2*p.L1*p.L2.*cos(thetaIn)).^2) ...
-         ./ (4*p.L3^2 *p.L4^2));
+% Numerical calculation of gamma
+gamma = 3*pi/2 + atan2((B(:,1)-C(:,1)),-(B(:,2)-C(:,2)));
 
-% Find the in vivo values for the thetaOut range of motion     
-thetaOut_start = thetaOut(abs(p.thetaStart-thetaIn) == ...
-                             min(abs(p.thetaStart-thetaIn)));   
-thetaOut_end = thetaOut(abs(p.thetaRest-thetaIn) == ...
-                             min(abs(p.thetaRest-thetaIn)));   
+% Discrete calculation of KT
+cs = fnder(csapi(theta,gamma));
+KT = fnval(cs,theta);
+
+% Visualize spline fit used to calculate KT numerically
+if 0
+    figure
+    xVals = theta(2:end)-diff(theta)./2;
+    plot(xVals,diff(gamma)./diff(theta),'-k', ...
+         xVals,fnval(cs,xVals),'r--')
+     clear xVals
+end
+
+clear cs
+
+% Find the in vivo values for the gamma range of motion     
+gamma_start = gamma(1);   
+gamma_end   = gamma(end);   
                          
 % Store results
-L.thetaIn     = thetaIn;
-L.thetaOut    = thetaOut;
-L.linFitIn    = [thetaIn(1); thetaIn(end)];
-L.linFitOut   = L.linFitIn.*KT_single - mean(L.linFitIn.*KT_single) + pi/2;
-L.KT_single   = KT_single;
-L.KT_all      = KT_all;
-L.thetaOutMin = min(thetaOut);
-L.thetaOutMax = max(thetaOut);
-L.thetaInMin  = min(thetaIn);
-L.thetaInMax  = max(thetaIn);
-L.thetaOut_start = thetaOut_start;
-L.thetaOut_end = thetaOut_end;
+L.theta       = theta;
+L.gamma       = gamma;
+L.KT          = KT;
+L.gamma_start = gamma_start;
+L.gamma_end   = gamma_end;
+
 
 % Visualize curve fit
 if visData
     figure;
-    plot(L.thetaIn.*(180/pi),L.thetaOut.*(180/pi),'-',...
+    plot(L.theta.*(180/pi),L.gamma.*(180/pi),'-',...
          L.linFitIn.*(180/pi),L.linFitOut.*(180/pi),'r-')
     xlabel('theta in');
     ylabel('theta out');
@@ -94,3 +100,10 @@ if visData
 end
 
 
+
+
+ 
+     
+
+     
+ 

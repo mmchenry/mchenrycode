@@ -1,9 +1,9 @@
-function force_analysis(currPath)
+function force_analysis
 % Analyzes force recordings for selected sequence, saves data
 
 % Prompt for folder
 if nargin < 1
-    currPath = pwd;
+    currPath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
     %currPath = uigetdir(pwd,'Select folder');
 end
 
@@ -186,14 +186,11 @@ end
 
 
 
-return
-
-
 %% Calculate momentum 
 
 visSeq = 1;
 
-if 0*visSeq
+if visSeq
     figure
 end
 

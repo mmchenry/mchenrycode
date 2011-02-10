@@ -9,16 +9,6 @@ visIndividual = 1;
 
 %% Path definitions (computer specific)
 
-
-% Path to text file of Mathematica commands
-p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
-
-% Path to the Mathematica kernel
-p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
-
-% Root path for simulation data
-p.simsPath = '/Volumes/data_commuter/Projects/Patek_project/sims';
-
 % Path to force data
 forcePath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
 
@@ -32,7 +22,7 @@ p.maxError = 10^-7;
 p.simDur    = 0.015;
 
 % Time values to evaluate results(use 1000-5000)
-p.t = linspace(0,p.simDur,1000);
+%p.t = linspace(0,p.simDur,1000);
 
 % List of individuals for comparison
 indivs = [120 121 122 123 125 129 132 133 137];
@@ -45,7 +35,7 @@ indivs = [120 121 122 123 125 129 132 133 137];
 %p.waterI      = 1e-8;
 
 % 3rd moment of area of dactyl (m^5) (for 12 mm long dactyl, r = 3 mm)
-p.dacA  = 0.25*(3e-3)*(12e-3)^4;
+%p.dacA  = 0.25*(3e-3)*(12e-3)^4;
 
 % Density of water (kg/m^3)
 p.rho = 998;
@@ -85,6 +75,10 @@ for i = 1:length(indivs)
             p_cum_all = calc_momentum(fd(j).t,t_start,t_end,...
                 fd(j).Fx,fd(j).Fy,fd(j).Fz);
             
+            p = get_params(fd(j).indiv,p);
+            
+            r.indiv(i)       = fd(j).indiv;
+            r.k_spring(i)    = p.kSpring;
             r.p_meas_pk(i)   = p_cum_pk(end);
             r.p_meas_all(i)  = p_cum_all(end);
             r.maxForce(i)    = max(fd(j).F);
@@ -111,7 +105,10 @@ for i = 1:length(indivs)
     
     [d,result] = run_sim(p);
     
-    r.p_model(i) = max(d.dacCOMSpd).*p.dacMass;
+    L_out = sqrt(p.dacI/p.dacMass);
+    
+    
+    r.p_model(i) = max(d.Dgamma)*L_out*p.dacMass;
     r.dacI(i) = p.dacI;
     r.dacMass(i) = p.dacMass;
     
@@ -158,6 +155,9 @@ xlabel('Measured from peak')
 ylabel('Measured from all')
 axis square
 grid on
+
+% figure;
+% plot(r.k_spring,r.p_meas_pk,'o')
 
 return
 if 0*visIndividual

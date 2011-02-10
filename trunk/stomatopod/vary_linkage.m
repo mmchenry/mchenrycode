@@ -1,21 +1,6 @@
 function vary_linkage
 
 
-%% Path definitions (computer specific)
-
-
-% Path to text file of Mathematica commands
-p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
-
-% Path to the Mathematica kernel
-p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
-
-% Root path for simulation data
-p.simsPath = '/Volumes/data_commuter/Projects/Patek_project/sims';
-
-% Path to force data
-forcePath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
-
 
 %% Simulation parameters
 
@@ -63,12 +48,12 @@ p = get_params(indiv,p);
 p_start = p;
 
 
-L3s = linspace(L3_min,L3_max,5);
+L3s = linspace(L3_min,L3_max,10);
 L3s = L3s(end:-1:1);
 
 clrs = {'r-','g-','b-'};
 
-
+mksize = 4;
 
 for i = 1:length(L3s)
     
@@ -124,20 +109,45 @@ end
 
 
 subplot(2,1,1)
-plot(1000.*rD.L3,1000.*rD.t_peak,'o-',1000.*rN.L3,1000.*rN.t_peak,'ro-')
+h = plot(1000.*rD.L3,1000.*rD.t_peak,'o-',...
+         1000.*rN.L3,1000.*rN.t_peak,'ro-');
 legend('w/drag','no drag')
 ylabel('time to peak speed (ms)')
 xlabel('L3')
 axis square
 
+set(h(1),'MarkerSize',mksize)
+set(h(1),'MarkerFaceColor','b')
+set(h(2),'MarkerSize',mksize)
+set(h(2),'MarkerFaceColor','r')
+
 subplot(2,1,2)
-plot(1000.*rD.L3,rD.gamma.*(180/pi)./1000,'o-',...
-     1000.*rN.L3,rN.gamma.*(180/pi)./1000,'ro-',...
-     1000.*rN.L3,rN.al_pred.*(180/pi)./1000,'k-')
-ylabel('max ang speed (deg/s)')
+h = plot(1000.*rD.L3,rD.gamma.*(180/pi)./1000,'o-',...
+         1000.*rN.L3,rN.gamma.*(180/pi)./1000,'ro-',...
+         1000.*rN.L3,rN.al_pred.*(180/pi)./1000,'k-');
+     
+set(h(1),'MarkerSize',mksize)
+set(h(1),'MarkerFaceColor','b')
+set(h(2),'MarkerSize',mksize)
+set(h(2),'MarkerFaceColor','r')
+
+ylabel('max ang speed (deg/ms)')
 xlabel('L3')
 axis square
 
+figure
+subplot(2,3,[1:2,4:5])
+h = plot(rD.KT_min,rD.gamma.*(180/pi)./1000,'o-',...
+         rN.KT_min,rN.gamma.*(180/pi)./1000,'ro',...
+         rN.KT_min,rN.al_pred.*(180/pi)./1000,'k-');
+     
+set(h(1),'MarkerSize',mksize)
+set(h(1),'MarkerFaceColor','b')
+set(h(2),'MarkerSize',mksize)
+set(h(2),'MarkerFaceColor','r')
+ylabel('max ang speed (deg/ms)')
+xlabel('KT min')
+%axis square
 
 
 return

@@ -24,17 +24,12 @@ si = acos((h_BD^2 + p.L1^2 - p.L2^2)/(2*h_BD*p.L1)) +
      acos((h_BD^2 + p.L4^2 - p.L3^2)/(2*h_BD*p.L4)];
 
 
-(* Define appendage coordinates ------------------------------------------*)
-AX = 0;
-AY = 0;
-BX = L2 Sin[thetaIn];
-BY = L2 Cos[thetaIn];
-CX = L4 Sin[si];
-CY = L1 - L4 Cos[si];
-DX = 0;
-DY = L1;
-FX = 0;
-FY = -hAF;
-GX = FX - L5 Sin[gamma];
-GY = FY + L5 Cos[gamma];
+A       = [0 0];
+B(1,1)  = p.L2 * sin(thetaIn);
+B(1,2)  = p.L2 * cos(thetaIn);
+C(1,1)  = p.L4 * sin(si);
+C(1,2)  = p.L1 - p.L4 * cos(si);
+D(1,1)  = 0;
+D(1,2)  = L1;
+
 

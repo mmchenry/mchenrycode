@@ -12,44 +12,26 @@ if nargin < 2
     echoData = 1;
 end
 
+%% Global variables declared
+% Parameter structure 's' -- scaled version of 'p'
+global s sp_theta sp_KT
+
 
 %% Check input geometry - return empty "d", if geometry not possible
 
-L = check_linkage(p,0);
+[sp_gamma,sp_KT,sp_theta,min_theta,max_theta] = ...
+                                    linkage_functions(p.L1,p.L2,p.L3,p.L4);
 
-% Report problems with the geometry
-if (p.thetaStart < L.thetaInMin)
-    result{length(result)+1} = ...
-     'Starting theta value below what is possible for linkage geometry';
+if p.thetaStart < min_theta
+    error('Starting value for theta not theoretically possible');
+    
+elseif p.thetaRest > max_theta
+    error('Resting theta value greater than what is theoretically possible');
 
-elseif (p.thetaStart > L.thetaInMax)
-   result{length(result)+1} = ...
-     'Starting theta value above what is possible for linkage geometry';  
 end
-
-if isempty(L)
-    result{length(result)+1} = ...
-     'No range of motion possible for requested geomtry';  
-end
-
-% Stop execution if there is a reported problem
-if ~isempty(result)
-    d = [];
-    beep;beep;
-    warning('No simulation run')
-    disp(' ')
-    disp(result)
-    disp(' ')
-    return
-end
-
-clear L
 
 
 %% Scale input parameter values for numerical stability
-
-% Parameter structure 's' -- scaled version of 'p'
-global s
 
 % Scaling factors 
 sL = 1 / p.L1;
@@ -111,7 +93,8 @@ B = [s.L2.*sin(s.thetaStart) s.L2.*cos(s.thetaStart)];
 C = [s.L4.*sin(si_0) s.L1-s.L4.*cos(si_0)];
 
 % Initial value for eta
-gamma_0 = atan2((B(:,1)-C(:,1)),-(B(:,2)-C(:,2)));
+%gamma_0 = atan2((B(:,1)-C(:,1)),-(B(:,2)-C(:,2)));
+gamma_0 = 3*pi/2 + atan2((B(:,1)-C(:,1)),-(B(:,2)-C(:,2)));
 
 % Output angle
 %phi_0 = acos((s.L3^2 + s.L4^2 - h_BD^2) / (2*s.L3*s.L4));
@@ -122,7 +105,8 @@ clear h_BD B C si_0
 %% Run simulation
 
 % Simulation parameters
-options    = odeset('Events',@evnts,'RelTol',s.rel_tol);
+options    = odeset('Events',@evnts,'RelTol',s.rel_tol,...
+                    'MaxStep',s.simDuration./100);
 tspan      = [0 s.simDuration];
 init_vals  = [gamma_0; 0];
 
@@ -152,8 +136,8 @@ clear t X tspan init_vals s sT sL sM
 %% Calculate result parameters
 
 % Calculate theta for gamma values
-d.theta = calc_theta(d.gamma,p.L1,p.L2,p.L3,p.L4);
-
+%d.theta = calc_theta(d.gamma,p.L1,p.L2,p.L3,p.L4);
+d.theta = fnval(sp_theta,d.gamma);
 
 % % Rate of change in input angle
 % d.Dtheta = d.Dphi .* (p.L3 * p.L4 .* sin(d.phi)) ./ ...
@@ -182,16 +166,17 @@ d.D = [zeros(length(d.t),1) p.L1.*ones(length(d.t),1)];
 %        sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(d.phi)).^2) ...
 %        ./ (4*p.L1^2 *p.L2^2));
  
-KT = calc_KT(d.gamma,p.L1,p.L2,p.L3,p.L4);
+KT = fnval(sp_KT,d.theta);
 % Calculate KT for all t using a 5th-order polynomial
-coef = polyfit(d.theta,d.gamma,5);
-d.KT = polyval(polyder(coef,1),d.theta);
+cs = fnder(csapi(d.theta,d.gamma));
+d.KT = fnval(cs,d.theta);
+clear cs
 
 % Spring torque
-d.tau_spring = -p.kSpring*(p.thetaRest - d.theta);
+d.tau_spring = p.kSpring*(p.thetaRest - d.theta);
 
 % Drag torque
-d.tau_drag = -0.5*p.rho.*d.Dgamma.^2 .* p.dacLen^5 .* p.D  .* ... 
+d.tau_drag = 0.5*p.rho.*d.Dgamma.^2 .* p.dacLen^5 .* p.D  .* ... 
              d.Dgamma./abs(10^-20 + d.Dgamma);
 
 % Elastic energy
@@ -204,13 +189,10 @@ d.E_kin = 0.5 * (p.dacI+p.waterI) .* d.Dgamma.^2;
 % Calculate drag energy
 d.E_drag = cumtrapz(abs(d.gamma-d.gamma(1)),abs(d.tau_drag));
 %d.E_drag = zeros(size(d.t,1),size(d.t,2));   
-
-
-
           
           
 function dX = gov_eqn(t,X)
-global s
+global s sp_theta sp_KT
 
 % Output angle of lever system
 gamma  = X(1);
@@ -219,10 +201,11 @@ gamma  = X(1);
 Dgamma = X(2);
 
 % Calculate theta for current gamma
-theta = calc_theta(gamma,s.L1,s.L2,s.L3,s.L4);
+%theta = calc_theta(gamma,s.L1,s.L2,s.L3,s.L4);
+theta = fnval(sp_theta,gamma);
 
 % KT
-KT = calc_KT(gamma,s.L1,s.L2,s.L3,s.L4);
+KT = fnval(sp_KT,theta);
 
 % Torque created by spring
 tau_spring = -s.kSpring*(s.thetaRest - theta);
@@ -244,7 +227,7 @@ dX(2,1) = (tau_in + tau_drag) ./ (s.dacI+s.waterI);
 function [value,isterminal,direction] = evnts(t,X)
 
 % Define global variables to be used
-global s
+global s sp_theta
 
 % Output angle of lever system
 gamma  = X(1);
@@ -253,7 +236,8 @@ gamma  = X(1);
 Dgamma = X(2);
 
 % Calculate theta for current gamma
-theta = calc_theta(gamma,s.L1,s.L2,s.L3,s.L4);
+theta = fnval(sp_theta,gamma);
+%theta = calc_theta(gamma,s.L1,s.L2,s.L3,s.L4);
 
 % Halts execution of the model
 isterminal = 1;
@@ -268,19 +252,19 @@ theta = acos((s.L1^2 + s.L2^2 - h_BD^2) / (2*s.L1*s.L2));
 if h_BD > (s.L3 + s.L4)
     value = 0;
     direction = 0;
-    error('Sim stopped early: h_BD cannot exceed L3 + L4')
+    error('Sim stopped: h_BD cannot exceed L3 + L4')
 elseif h_BD < abs(s.L4-s.L3)
     value = 0;
     direction = 0;
-    error('Sim stopped early: h_BD cannot be less than L4 - L3')       
+    error('Sim stopped: h_BD cannot be less than L4 - L3')       
 elseif h_BD > (s.L1 + s.L2)
     value = 0;
     direction = 0;
-    error('Sim stopped early: h_BD cannot exceed L1 + L2')
+    error('Sim stopped: h_BD cannot exceed L1 + L2')
 elseif h_BD < abs(s.L1 - s.L2)
     value = 0;
     direction = 0;
-    error('Sim stopped early: h_BD cannot be less than L1 - L2')
+    error('Sim stopped: h_BD cannot be less than L1 - L2')
 elseif (theta>=s.thetaRest)
     value = 0;
     direction = 0;
@@ -290,56 +274,6 @@ else
 end
 
 
-function theta = calc_theta(gamma,L1,L2,L3,L4)
-% Calculate theta for a given gamma for a particular 4-bar linkage
 
-theta = acos((L1.^3.*L2 + L1.*L2.^3 + 2.*L1.*L2.*L3.^2 - L1.*L2.*L4.^2 - ... 
-        L2.*L3.*(3.*L1.^2 + L2.^2 + L3.^2 - L4.^2).*cos(gamma) + ...
-        L1.*L2.*L3.^2.*cos(2.*gamma) + ...
-        sqrt(-L2.^2.*L3.^2.*(L1.^4 - 2.*L1.^2.*L2.^2 + L2.^4 + ...
-         4.*L1.^2.*L3.^2 - 2.*L2.^2.*L3.^2 + L3.^4 - 2.*L1.^2.*L4.^2 - ... 
-         2.*L2.^2.*L4.^2 - 2.*L3.^2.*L4.^2 + L4.^4 - ...
-         4.*L1.*L3.*(L1.^2 - L2.^2 + L3.^2 - L4.^2).*cos(gamma) + ... 
-         2.*L1.^2.*L3.^2.*cos(2.*gamma)).*sin(gamma).^2))./ ...
-         (2.*L2.^2.*(L1.^2 + L3.^2 - 2.*L1.*L3.*cos(gamma))));
-     
-     
-function KT = calc_KT(gamma,L1,L2,L3,L4)
-% Ratio of output angle to input angle (Dgamma/Dtheta) for a given gamma
-% and four-bar geometry
 
-KT = ...
-1 ./ (-(-2*L1*L3.* sin(gamma) .*...
-(L1^3*L2 + L1*L2^3 + 2*L1*L2*L3^2 - L1*L2*L4^2 - ... 
- L2*L3.*(3*L1^2 + L2^2 + L3^2 - L4^2) .* cos(gamma) + ... 
- L1*L2*L3^2 .* cos(2.*gamma) + sqrt(-L2^2 * L3^2 * ...
- (L1^4 - 2*L1^2*L2^2 + L2^4 + 4*L1^2*L3^2 - ...
-  2*L2^2*L3^2 + L3^4 - 2*L1^2*L4^2 - 2*L2^2*L4^2 - ...
-  2*L3^2*L4^2 + L4^4 - 4*L1*L3*(L1^2 - L2^2 + L3^2 - L4^2) .* ...
-  cos(gamma) + 2*L1^2*L3^2 .* cos(2.*gamma)) .* sin(gamma).^2)) + ...
-  L2*L3*(L1^2 + L3^2 - 2*L1*L3 .* cos(gamma)) .* ...
-  ((3*L1^2 + L2^2 + L3^2 - L4^2) .* sin(gamma) - ...
-  (L2*L3.*((L1^4 + L2^4 + (L3^2 - L4^2)^2 - ... 
-   2*L1^2*(L2^2 - 2*L3^2 + L4^2) - ...
-   2*L2^2*(L3^2 + L4^2)) .* cos(gamma) + ...
-   L1*L3*(-L1^2 + L2^2 - L3^2 + L4^2 - ...
-   3*(L1^2 - L2^2 + L3^2 - L4^2) .* cos(2.*gamma) + ... 
-   2*L1*L3.* cos(3.*gamma))) .* sin(gamma)) ...
-   ./(sqrt(-L2^2*L3^2 .* (L1^4 - 2*L1^2*L2^2 + L2^4 + ... 
-      4*L1^2*L3^2 - 2*L2^2*L3^2 + L3^4 - 2*L1^2*L4^2 - ... 
-      2*L2^2*L4^2 - 2*L3^2*L4^2 + L4^4 - ... 
-      4*L1*L3.*(L1^2 - L2^2 + L3^2 - L4^2) .* cos(gamma) + ... 
-      2*L1^2*L3^2 .* cos(2.*gamma)) .* sin(gamma).^2)) - ...
-      2*L1*L3 .* sin(2.*gamma))) ./ (2*L2^2 .* (L1^2 + L3^2 - ... 
-      2*L1*L3 .* cos(gamma)).^2 .* ...
-      sqrt(1 - (L1^3*L2 + L1*L2^3 + 2*L1*L2.* L3^2 - ... 
-          L1*L2*L4^2 - L2*L3*(3*L1^2 + L2^2 + L3^2 - L4^2) .* ...
-          cos(gamma) + L1*L2*L3^2 .* cos(2.*gamma) + ...
-          sqrt(-L2^2*L3^2*(L1^4 - 2*L1^2*L2^2 + ...
-                 L2^4 + 4*L1^2*L3^2 - 2*L2^2*L3^2 + L3^4 - ... 
-                 2*L1^2*L4^2 - 2*L2^2*L4^2 - 2*L3^2*L4^2 + ...
-                 L4^4 - 4*L1*L3 * (L1^2 - L2^2 + L3^2 - L4^2) .* ...
-                 cos(gamma) + 2*L1^2*L3^2 .* cos(2.*gamma)) .* ...
-                 sin(gamma).^2)).^2 ./ (4*L2^4 * ...
-                 (L1^2 + L3^2 - 2*L1*L3.* cos(gamma)).^2))));
              

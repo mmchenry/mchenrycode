@@ -1,4 +1,4 @@
-function analyze_linkage
+function analyze_linkage_simple
 % Sensitivity analysis that examines KT and Range of Motion (ROM) for 
 % different lengths in 4-bar linkage.
 
@@ -22,7 +22,7 @@ L3M = linspace(p.L3-dL,p.L3+dL,numPts);
 L4M = linspace(p.L4-dL,p.L4+dL,numPts);
 
 
-if 0
+if 1
 l_txt{1} = 'L1';
 l_txt{2} = 'L2';
 l_txt{3} = 'L3';
@@ -39,11 +39,11 @@ for i = 1:length(L1M)
         KTvals(i,j) = nan;
         maxOutVals(i,j) = nan;
     else
-        iKT_rest        = find(abs(L.thetaIn-p.thetaRest) == ...
-                               min(abs(L.thetaIn-p.thetaRest)));
-        %KTvals(i,j)     = L.KT_all(iKT_rest);
-        KTvals(i,j)     = min(L.KT_all);
-        maxOutVals(i,j) = (L.thetaInMax - L.thetaInMin) * (180/pi);
+        iKT_rest        = find(abs(L.theta-p.thetaRest) == ...
+                               min(abs(L.theta-p.thetaRest)));
+        %KTvals(i,j)     = L.KT(iKT_rest);
+        KTvals(i,j)     = min(L.KT);
+        maxOutVals(i,j) = range(L.theta) * (180/pi);
     end 
     clear L
 end
@@ -59,11 +59,11 @@ for i = 1:length(L2M)
         KTvals(i,j) = nan;
         maxOutVals(i,j) = nan;
     else
-        iKT_rest        = find(abs(L.thetaIn-p.thetaRest) == ...
-                               min(abs(L.thetaIn-p.thetaRest)));
-        %KTvals(i,j)     = L.KT_all(iKT_rest);
-        KTvals(i,j)     = min(L.KT_all);
-        maxOutVals(i,j) = (L.thetaInMax - L.thetaInMin) * (180/pi);
+        iKT_rest        = find(abs(L.theta-p.thetaRest) == ...
+                               min(abs(L.theta-p.thetaRest)));
+        %KTvals(i,j)     = L.KT(iKT_rest);
+        KTvals(i,j)     = min(L.KT);
+        maxOutVals(i,j) = range(L.theta) * (180/pi);
     end 
     clear L
 end
@@ -79,11 +79,11 @@ for i = 1:length(L3M)
         KTvals(i,j) = nan;
         maxOutVals(i,j) = nan;
     else
-        iKT_rest        = find(abs(L.thetaIn-p.thetaRest) == ...
-                               min(abs(L.thetaIn-p.thetaRest)));
-        %KTvals(i,j)     = L.KT_all(iKT_rest);
-        KTvals(i,j)     = min(L.KT_all);
-        maxOutVals(i,j) = (L.thetaInMax - L.thetaInMin) * (180/pi);
+        iKT_rest        = find(abs(L.theta-p.thetaRest) == ...
+                               min(abs(L.theta-p.thetaRest)));
+        %KTvals(i,j)     = L.KT(iKT_rest);
+        KTvals(i,j)     = min(L.KT);
+        maxOutVals(i,j) = range(L.theta) * (180/pi);
     end 
     clear L
 end
@@ -99,11 +99,11 @@ for i = 1:length(L4M)
         KTvals(i,j) = nan;
         maxOutVals(i,j) = nan;
     else
-        iKT_rest        = find(abs(L.thetaIn-p.thetaRest) == ...
-                               min(abs(L.thetaIn-p.thetaRest)));
-        %KTvals(i,j)     = L.KT_all(iKT_rest);
-        KTvals(i,j)     = min(L.KT_all);
-        maxOutVals(i,j) = (L.thetaInMax - L.thetaInMin) * (180/pi);
+        iKT_rest        = find(abs(L.theta-p.thetaRest) == ...
+                               min(abs(L.theta-p.thetaRest)));
+        %KTvals(i,j)     = L.KT(iKT_rest);
+        KTvals(i,j)     = min(L.KT);
+        maxOutVals(i,j) = range(L.theta) * (180/pi);
     end 
     clear L
 end
@@ -170,23 +170,23 @@ p = get_params(indiv);
 %p.L3 = L3M(1);
 L = check_linkage(p,0,10^6);
 
-idx = (L.thetaIn > p.thetaStart) & (L.thetaIn < p.thetaRest);
+idx = (L.theta > p.thetaStart) & (L.theta < p.thetaRest);
 
 figure
 
 subplot(2,1,1)
-h = plot(L.thetaIn.*(180/pi),L.thetaOut.*(180/pi),'k');
+h = plot(L.theta.*(180/pi),L.gamma.*(180/pi),'k');
 hold on
 set(h,'Color',.8.*[1 1 1]);
 set(h,'LineWidth',1);
-h = plot(L.thetaIn(idx).*(180/pi),L.thetaOut(idx).*(180/pi),'r');
+h = plot(L.theta(idx).*(180/pi),L.gamma(idx).*(180/pi),'r');
 
 subplot(2,1,2)
-h = plot(L.thetaIn.*(180/pi),L.KT_all,'k');
+h = plot(L.theta.*(180/pi),L.KT,'k');
 hold on
 set(h,'Color',.8.*[1 1 1]);
 set(h,'LineWidth',1);
-h = plot(L.thetaIn(idx).*(180/pi),L.KT_all(idx),'r');
+h = plot(L.theta(idx).*(180/pi),L.KT(idx),'r');
 
 clear L p
 
@@ -194,24 +194,26 @@ p = get_params(indiv);
 p.L3 = p.L3+0.0005;
 L = check_linkage(p,0,10^6);
 
-idx = (L.thetaIn > p.thetaStart) & (L.thetaIn < p.thetaRest);
+idx = (L.theta > p.thetaStart) & (L.theta < p.thetaRest);
 
 subplot(2,1,1)
-h = plot(L.thetaIn.*(180/pi),L.thetaOut.*(180/pi),'k');
+h = plot(L.theta.*(180/pi),L.gamma.*(180/pi),'k');
 hold on
 set(h,'Color',.8.*[1 1 1]);
 set(h,'LineWidth',1);
-h = plot(L.thetaIn(idx).*(180/pi),L.thetaOut(idx).*(180/pi),'b');
-set(gca,'YTick',[0:45:180])
+h = plot(L.theta(idx).*(180/pi),L.gamma(idx).*(180/pi),'b');
+set(gca,'YTick',[135:45:315])
+set(gca,'XTick',[45:45:135])
 axis square
 
 subplot(2,1,2)
-h = plot(L.thetaIn.*(180/pi),L.KT_all,'k');
+h = plot(L.theta.*(180/pi),L.KT,'k');
 hold on
 set(h,'Color',.8.*[1 1 1]);
 set(h,'LineWidth',1);
-h = plot(L.thetaIn(idx).*(180/pi),L.KT_all(idx),'b');
-ylim([2 25])
+h = plot(L.theta(idx).*(180/pi),L.KT(idx),'b');
+ylim([0 25])
+set(gca,'XTick',[45:45:135])
 axis square
 
 
@@ -260,3 +262,58 @@ set(h,'LineWidth',2);
 axis equal
 hold off
 
+
+% 
+% function theta = calc_theta(gamma,L1,L2,L3,L4)
+% % Calculate theta for a given gamma for a particular 4-bar linkage
+% 
+% theta = acos((L1.^3.*L2 + L1.*L2.^3 + 2.*L1.*L2.*L3.^2 - L1.*L2.*L4.^2 - ... 
+%         L2.*L3.*(3.*L1.^2 + L2.^2 + L3.^2 - L4.^2).*cos(gamma) + ...
+%         L1.*L2.*L3.^2.*cos(2.*gamma) + ...
+%         sqrt(-L2.^2.*L3.^2.*(L1.^4 - 2.*L1.^2.*L2.^2 + L2.^4 + ...
+%          4.*L1.^2.*L3.^2 - 2.*L2.^2.*L3.^2 + L3.^4 - 2.*L1.^2.*L4.^2 - ... 
+%          2.*L2.^2.*L4.^2 - 2.*L3.^2.*L4.^2 + L4.^4 - ...
+%          4.*L1.*L3.*(L1.^2 - L2.^2 + L3.^2 - L4.^2).*cos(gamma) + ... 
+%          2.*L1.^2.*L3.^2.*cos(2.*gamma)).*sin(gamma).^2))./ ...
+%          (2.*L2.^2.*(L1.^2 + L3.^2 - 2.*L1.*L3.*cos(gamma))));
+%      
+%      
+% function KT = calc_KT(gamma,L1,L2,L3,L4)
+% % Ratio of output angle to input angle (Dgamma/Dtheta) for a given gamma
+% % and four-bar geometry
+% 
+% KT = ...
+% 1 ./ (-(-2*L1*L3.* sin(gamma) .*...
+% (L1^3*L2 + L1*L2^3 + 2*L1*L2*L3^2 - L1*L2*L4^2 - ... 
+%  L2*L3.*(3*L1^2 + L2^2 + L3^2 - L4^2) .* cos(gamma) + ... 
+%  L1*L2*L3^2 .* cos(2.*gamma) + sqrt(-L2^2 * L3^2 * ...
+%  (L1^4 - 2*L1^2*L2^2 + L2^4 + 4*L1^2*L3^2 - ...
+%   2*L2^2*L3^2 + L3^4 - 2*L1^2*L4^2 - 2*L2^2*L4^2 - ...
+%   2*L3^2*L4^2 + L4^4 - 4*L1*L3*(L1^2 - L2^2 + L3^2 - L4^2) .* ...
+%   cos(gamma) + 2*L1^2*L3^2 .* cos(2.*gamma)) .* sin(gamma).^2)) + ...
+%   L2*L3*(L1^2 + L3^2 - 2*L1*L3 .* cos(gamma)) .* ...
+%   ((3*L1^2 + L2^2 + L3^2 - L4^2) .* sin(gamma) - ...
+%   (L2*L3.*((L1^4 + L2^4 + (L3^2 - L4^2)^2 - ... 
+%    2*L1^2*(L2^2 - 2*L3^2 + L4^2) - ...
+%    2*L2^2*(L3^2 + L4^2)) .* cos(gamma) + ...
+%    L1*L3*(-L1^2 + L2^2 - L3^2 + L4^2 - ...
+%    3*(L1^2 - L2^2 + L3^2 - L4^2) .* cos(2.*gamma) + ... 
+%    2*L1*L3.* cos(3.*gamma))) .* sin(gamma)) ...
+%    ./(sqrt(-L2^2*L3^2 .* (L1^4 - 2*L1^2*L2^2 + L2^4 + ... 
+%       4*L1^2*L3^2 - 2*L2^2*L3^2 + L3^4 - 2*L1^2*L4^2 - ... 
+%       2*L2^2*L4^2 - 2*L3^2*L4^2 + L4^4 - ... 
+%       4*L1*L3.*(L1^2 - L2^2 + L3^2 - L4^2) .* cos(gamma) + ... 
+%       2*L1^2*L3^2 .* cos(2.*gamma)) .* sin(gamma).^2)) - ...
+%       2*L1*L3 .* sin(2.*gamma))) ./ (2*L2^2 .* (L1^2 + L3^2 - ... 
+%       2*L1*L3 .* cos(gamma)).^2 .* ...
+%       sqrt(1 - (L1^3*L2 + L1*L2^3 + 2*L1*L2.* L3^2 - ... 
+%           L1*L2*L4^2 - L2*L3*(3*L1^2 + L2^2 + L3^2 - L4^2) .* ...
+%           cos(gamma) + L1*L2*L3^2 .* cos(2.*gamma) + ...
+%           sqrt(-L2^2*L3^2*(L1^4 - 2*L1^2*L2^2 + ...
+%                  L2^4 + 4*L1^2*L3^2 - 2*L2^2*L3^2 + L3^4 - ... 
+%                  2*L1^2*L4^2 - 2*L2^2*L4^2 - 2*L3^2*L4^2 + ...
+%                  L4^4 - 4*L1*L3 * (L1^2 - L2^2 + L3^2 - L4^2) .* ...
+%                  cos(gamma) + 2*L1^2*L3^2 .* cos(2.*gamma)) .* ...
+%                  sin(gamma).^2)).^2 ./ (4*L2^4 * ...
+%                  (L1^2 + L3^2 - 2*L1*L3.* cos(gamma)).^2))));
+             
