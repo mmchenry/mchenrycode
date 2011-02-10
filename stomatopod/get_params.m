@@ -21,7 +21,7 @@ L4 = 10^-3 .* [6.676 7.335 7.5588 8.596 7.511 7.988 7.91 8.293 8.718 7.839 6.467
 % distal end of the dactyl
 dac_len = 10^-3 .* [9.627 10.48 10.902 12.372 10.4549 11.179 11.357 ...
                     11.7348 12.105 11.439 9.4076];    
-                
+
 % Mass of the striking body (kg) -- estimated from scalign relationships of
 % CT specimens
 dac_mass =  10^-6 .* 10.^(3.13.*log10(dac_len.*1000) -0.885);              

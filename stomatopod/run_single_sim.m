@@ -3,22 +3,8 @@ function run_single_sim
 % Similar to model_test, but doesn't rerun for all indivduals
 
 % Indivudal to simulate
-indiv = 120;
+indiv = 121;
 
-
-%% Path definitions (computer specific)
-
-% % Path to text file of Mathematica commands
-% p.mathFile = ['"<</Volumes/data_commuter/Projects/Patek_project/stomatopod_mfiles/sim_code.txt"'];
-% 
-% % Path to the Mathematica kernel
-% p.kernelPath = '/Applications/Mathematica.app/Contents/MacOS/MathKernel';
-% 
-% % Root path for simulation data
-% p.simsPath = '/Volumes/data_commuter/Projects/Patek_project/sims';
-% 
-% % Path to force data
-% forcePath = '/Volumes/data_commuter/Projects/Patek_project/force_data';
 
 
 %% Simulation parameters
@@ -61,25 +47,32 @@ p = get_params(indiv,p);
 %p.waterI = 0;
 
 %dL = 1e-4;
-
+%p.dacMass  = p.dacMass * 0.4;
+%p.dacI    = 0.28608 .* (( p.dacLen).^2) .* p.dacMass;
 %p.D = 3*p.D;
 p.rel_tol = 1e-7;
 % Run simulation
 [d,result] = run_sim(p,0);
 
 L = check_linkage(p,0,10^6);
-minKT = min(L.KT_all);
+minKT = min(L.KT);
 
 
 %% Visualize simulation results
 figure;
 
-subplot(2,1,1)
-plot(d.t.*1000,d.theta.*180/pi,'r',d.t.*1000,-(d.gamma)*180/pi,'b')
-legend('in ','out','Location','NorthWest');
-ylabel('angle (deg)')
+subplot(4,1,1)
+plot(d.t.*1000,d.theta.*180/pi,'r')
+ylabel('theta (deg)')
 xlabel('time (ms)')
 grid on
+
+subplot(4,1,2)
+plot(d.t.*1000,(d.gamma)*180/pi,'b')
+ylabel('gamma (deg)')
+xlabel('time (ms)')
+grid on
+
 % 
 % subplot(3,1,2)
 % plot(d.t.*1000,(d.dacAngSpd.*180/pi)./1000)
@@ -87,7 +80,7 @@ grid on
 % xlabel('time (ms)')
 % grid on
 
-subplot(2,1,2)
+subplot(4,1,3:4)
 E_tot = d.E_kin + d.E_drag + d.E_elastic;
 %E_tot = d.E_kin + d.E_elastic;
 plot(d.t.*1000,d.E_elastic.*1000,'r',d.t.*1000,d.E_drag.*1000,'b',...
