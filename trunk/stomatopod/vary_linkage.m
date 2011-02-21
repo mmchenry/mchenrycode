@@ -8,7 +8,7 @@ function vary_linkage
 p.maxError = 10^-7;
 
 % Duration of simulation (s)
-p.simDur    = 0.002;
+p.simDur    = 0.02;
 
 % Time values to evaluate results(use 1000-5000)
 p.t = linspace(0,p.simDur,1000);
@@ -80,6 +80,7 @@ for i = 1:length(L3s)
     rD.theta_max(i)  = dD.gamma(idx)-dD.gamma(1);
     rD.t_peak(i)     = dD.t(dD.Dgamma==max(dD.Dgamma));
     rD.KT_min(i)     = min(dD.KT);
+    rD.efficiency(i) = 100*max(dD.E_kin)./max(dD.E_elastic);
     
     % Run the model without drag
     p.D = 0;
@@ -98,6 +99,7 @@ for i = 1:length(L3s)
 
     rN.al_pred(i)     = sqrt(p.kSpring./((p.dacI+p.waterI))) * ...
                              ((p.thetaRest-p.thetaStart));
+    rN.efficiency(i) = 100*max(dN.E_kin)./max(dN.E_elastic);
     %figure;plot(dN.t,p.thetaRest-dN.thetaIn)
     % Reset parameter values for next loop
     p = p_start;
@@ -146,6 +148,18 @@ set(h(1),'MarkerFaceColor','b')
 set(h(2),'MarkerSize',mksize)
 set(h(2),'MarkerFaceColor','r')
 ylabel('max ang speed (deg/ms)')
+xlabel('KT min')
+
+figure
+subplot(2,3,[1:2,4:5])
+h = plot(rD.KT_min,rD.efficiency,'-',...
+         rN.KT_min,rN.efficiency,'r-');
+     
+set(h(1),'MarkerSize',mksize)
+set(h(1),'MarkerFaceColor','b')
+set(h(2),'MarkerSize',mksize)
+set(h(2),'MarkerFaceColor','r')
+ylabel('Efficiency')
 xlabel('KT min')
 %axis square
 

@@ -99,9 +99,6 @@ clear all
 
 
 
-
-return
-
 %% CT Scan analysis
 
 % Paths to the CT scans

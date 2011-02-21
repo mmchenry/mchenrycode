@@ -2,7 +2,7 @@ function [sp_gamma,sp_KT,sp_theta,min_theta,max_theta] = linkage_functions(L1,L2
 % Returns spline functions that describe how gamma and KT vary with theta
 
 % Number of discrete values to consider
-numVals = 1000;
+numVals = 10000;
 
 % Define full range of possible values for gamma
 theta = linspace(0,pi,numVals)';

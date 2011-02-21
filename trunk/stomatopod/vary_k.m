@@ -8,7 +8,7 @@ function vary_k
 p.maxError = 10^-7;
 
 % Duration of simulation (s)
-p.simDur    = 0.002;
+p.simDur    = 0.02;
 
 % Time values to evaluate results(use 1000-5000)
 p.t = linspace(0,p.simDur,1000);
