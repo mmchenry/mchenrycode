@@ -106,7 +106,7 @@ clear h_BD B C si_0
 
 % Simulation parameters
 options    = odeset('Events',@evnts,'RelTol',s.rel_tol,...
-                    'MaxStep',s.simDuration./100);
+                    'MaxStep',s.simDuration./1000);
 tspan      = [0 s.simDuration];
 init_vals  = [gamma_0; 0];
 
@@ -158,15 +158,9 @@ d.B = [p.L2.*sin(d.theta) p.L2.*cos(d.theta)];
 d.C = [p.L4.*sin(d.si) p.L1-p.L4.*cos(d.si)];
 d.D = [zeros(length(d.t),1) p.L1.*ones(length(d.t),1)];
 
-% Angle of link 3 in gobal FOR
-%eta = atan2((d.B(:,1)-d.C(:,1)),-(d.B(:,2)-d.C(:,2)));
-
-% % Kinematic transmission
-% d.KT = (p.L1*p.L2)/(p.L3*p.L4) .* csc(d.phi) .* ...
-%        sqrt(1-((p.L1^2+p.L2^2-p.L3^2-p.L4^2+2*p.L3*p.L4.*cos(d.phi)).^2) ...
-%        ./ (4*p.L1^2 *p.L2^2));
- 
+% Find KT for theta value
 KT = fnval(sp_KT,d.theta);
+
 % Calculate KT for all t using a 5th-order polynomial
 cs = fnder(csapi(d.theta,d.gamma));
 d.KT = fnval(cs,d.theta);

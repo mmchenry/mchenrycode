@@ -8,7 +8,7 @@ function vary_mass
 p.maxError = 10^-7;
 
 % Duration of simulation (s)
-p.simDur    = 0.002;
+p.simDur    = 0.02;
 
 % Time values to evaluate results(use 1000-5000)
 p.t = linspace(0,p.simDur,1000);
@@ -67,9 +67,10 @@ for i = 1:length(masses)
     
     % Store results
     rD.dacMass(i)    = p.dacMass;
-    rD.gamma(i)      = max(dD.Dgamma);
+    rD.Dgamma(i)     = max(dD.Dgamma);
     rD.E_drag(i)     = max(dD.E_drag);
-    rD.theta_max(i)  = dD.gamma(idx)-dD.gamma(1);
+    rD.theta_rng(i)  = range(dD.theta);
+    rD.gamma_rng(i)  = range(dD.gamma);
     rD.t_peak(i)     = dD.t(dD.Dgamma==max(dD.Dgamma));
     rD.KT_min(i)     = min(dD.KT);
     rD.momentum(i)   = p.dacI .* max(dD.Dgamma);
@@ -83,8 +84,9 @@ for i = 1:length(masses)
     
     % Store results
     rN.dacMass(i)    = p.dacMass;
-    rN.gamma(i)      = max(dN.Dgamma);
-    rN.theta_max(i)  = dN.gamma(idx)-dN.gamma(1);
+    rN.Dgamma(i)     = max(dN.Dgamma);
+    rN.theta_rng(i)  = range(dN.theta);
+    rN.gamma_rng(i)  = range(dN.gamma);
     rN.t_peak(i)     = dD.t(dN.Dgamma==max(dN.Dgamma));
     rN.KT_min(i)     = min(dN.KT);
 
@@ -101,24 +103,11 @@ for i = 1:length(masses)
 end
 
 figure;
-% subplot(3,1,1)
-% h = plot(1000.*rD.dacMass,1000.*rD.t_peak,'o-',...
-%          1000.*rN.dacMass,1000.*rN.t_peak,'ro-');
-% legend('w/drag','no drag')
-% ylabel('time to peak speed (ms)')
-% xlabel('Dac mass (g)')
-% axis square
-% 
-% set(h(1),'MarkerSize',mksize)
-% set(h(1),'MarkerFaceColor','b')
-% set(h(2),'MarkerSize',mksize)
-% set(h(2),'MarkerFaceColor','r')
-% title('normal L3')
 
-subplot(3,1,1)
-h = plot(1000.*rD.dacMass,rD.theta_max.*180/pi,'o-',...
-         1000.*rN.dacMass,rN.theta_max.*180/pi,'ro-');
-legend('w/drag','no drag')
+subplot(4,1,1)
+h = plot(1000.*rD.dacMass,rD.theta_rng.*180/pi,'o-',...
+         1000.*rN.dacMass,rN.theta_rng.*180/pi,'ro');
+hold on
 ylabel('Range of motion (deg)')
 xlabel('Dac mass (g)')
 axis square
@@ -127,12 +116,19 @@ set(h(1),'MarkerSize',mksize)
 set(h(1),'MarkerFaceColor','b')
 set(h(2),'MarkerSize',mksize)
 set(h(2),'MarkerFaceColor','r')
-title('normal L3')
 
+h = plot(1000.*rD.dacMass,rD.gamma_rng.*180/pi,'go',...
+         1000.*rN.dacMass,rN.gamma_rng.*180/pi,'mo');
 
-subplot(3,1,2)
-h = plot(1000.*rD.dacMass,rD.gamma.*(180/pi)./1000,'o-',...
-         1000.*rN.dacMass,rN.gamma.*(180/pi)./1000,'ro-',...
+set(h(1),'MarkerSize',mksize)
+set(h(2),'MarkerSize',mksize)
+
+legend('theta w/drag','theta no drag','gamma w/drag','gamma w/out drag',...
+       'Location','EastOutside')
+
+subplot(4,1,2)
+h = plot(1000.*rD.dacMass,rD.Dgamma.*(180/pi)./1000,'o-',...
+         1000.*rN.dacMass,rN.Dgamma.*(180/pi)./1000,'ro-',...
          1000.*rN.dacMass,rN.al_pred.*(180/pi)./1000,'k-');
      
 set(h(1),'MarkerSize',mksize)
@@ -144,7 +140,7 @@ ylabel('max ang speed (deg/s)')
 xlabel('Dac Mass (g)')
 axis square
 
-subplot(3,1,3)
+subplot(4,1,3)
 h = plot(1000.*rD.dacMass,rD.momentum.*10^6,'o-',...
          1000.*rN.dacMass,rN.momentum.*10^6,'ro-');
      
@@ -157,6 +153,19 @@ ylabel('Angular momentum')
 xlabel('Dac Mass (g)')
 axis square
 
+subplot(4,1,4)
+h = plot(1000.*rD.dacMass,1000.*rD.t_peak,'o-',...
+         1000.*rN.dacMass,1000.*rN.t_peak,'ro-');
+legend('w/drag','no drag')
+ylabel('time to peak speed (ms)')
+xlabel('Dac mass (g)')
+axis square
+
+set(h(1),'MarkerSize',mksize)
+set(h(1),'MarkerFaceColor','b')
+set(h(2),'MarkerSize',mksize)
+set(h(2),'MarkerFaceColor','r')
+title('normal L3')
 return
 
 %% Run for mass, high L3
