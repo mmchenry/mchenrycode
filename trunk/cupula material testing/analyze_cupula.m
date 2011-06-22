@@ -1,0 +1,189 @@
+function analyze_cupula
+% Pools together the DAQ and video data to analyze the cupula materials
+% testing experiments
+
+
+%% Parameters
+
+% Calibration constants for each mag cube, using the 63x objective and
+% Photron 1025 at full res
+vid_1_6 = 0.1576; %(micron/pix)
+vid_1_0 = 0.2733; %(micron/pix)
+vid_2_5 = 0.0984; %(micron/pix)
+
+% Maximum pressure rating on the transducer
+p_max = 0.3; %(psi)
+
+% Pressure conversion factor 
+pres_convert = 6894.76; %(Pa/psi)
+
+% Voltage span of the transducer
+v_span = 5; %(V)
+
+% Voltage offset of the transducer
+v_offset = 1; %(V)
+
+
+%% Browse for sequence
+
+% Prompt for directory
+if nargin < 1
+   [daq_file,vPath] = uigetfile([pwd filesep '*.mat'],'Choose daq data file');
+end
+
+% Load daq data 'd'
+load([vPath filesep daq_file])
+
+% Look for 'long' dir
+long_path  = [vPath filesep 'long'];
+if isempty(dir(long_path)) 
+    error('You need to have a "long" directory with tiff files');
+    
+elseif isempty(dir([long_path filesep 'edge_data.mat']))
+    warning('You need to run acquire_strain.m on your "long" video');
+    
+    pL = [];
+    sL = [];
+    
+else
+    % Load sequence data
+    load([long_path filesep 'seq_data.mat'])
+    
+    % Load video data 's'
+    load([long_path filesep 'edge_data.mat'])
+    
+    pL = p;
+    sL = s;
+    
+    clear p s 
+end
+
+% Look for 'short' dir
+short_path  = [vPath filesep 'short'];
+if isempty(dir(short_path)) 
+    error('You need to have a "short" directory with tiff files');
+    
+elseif isempty(dir([short_path filesep 'edge_data.mat']))
+    warning('You need to run acquire_strain.m on your "short" video');
+    
+    pS = [];
+    sS = [];
+    
+else
+    % Load sequence data
+    load([short_path filesep 'seq_data.mat'])
+    
+    % Load video data
+    load([short_path filesep 'edge_data.mat'])
+    
+    pS = p;
+    sS = s;
+    
+    clear p s
+end
+
+%% Plot for short sequence
+
+if ~isempty(pS)
+    % Set calibration constant for particular mag cube
+    if pS.magcube==1
+        cal_const = vid_1_0;
+        
+    elseif pS.magcube==1.6
+        cal_const = vid_1_6;
+        
+    elseif pS.magcube==2.5
+        cal_const = vid_2_5;
+        
+    end
+    
+    % Plot
+    f = plot_data(sS,d.short,cal_const,p_max,v_span,v_offset,pres_convert,'short');
+    
+    clear cal_const
+end
+
+
+%% Plot for long sequence
+
+if ~isempty(pL)
+    % Set calibration constant for particular mag cube
+    if pL.magcube==1
+        cal_const = vid_1_0;
+        
+    elseif pS.magcube==1.6
+        cal_const = vid_1_6;
+        
+    elseif pS.magcube==2.5
+        cal_const = vid_2_5;
+        
+    end
+    
+    % Plot
+    f = plot_data(sL,d.long,cal_const,p_max,v_span,v_offset,pres_convert,'long');
+    
+    clear cal_const
+end
+
+
+
+function f = plot_data(s,d,cal_const,p_max,v_span,v_offset,pres_convert,title_txt)
+
+
+% Define data vectros from video
+vid_t = s.t;
+vid_deflection = (s.xEdge-min(s.xEdge)) .* cal_const;
+
+
+%% Calculate pressure from voltage
+
+% Index for which daq data overlaps with video
+%idx = (d.t>min(vid_t)) & (d.t<max(vid_t));
+
+% Slope of conversion (psi/V)
+m = 2*p_max/v_span;
+
+% Intercept
+b = -m*(v_offset+v_span/2);
+
+% Pressure calculation
+pres_psi = m.*d.volts + b;
+
+% Unit conversion: psi to Pa
+daq_pressure  = pres_psi .* pres_convert;
+
+% Define time
+daq_t = d.t;
+
+% Clean up
+clear m b pres_psi idx
+
+
+%% Interpolate the daq data
+
+pressure = interp1(daq_t,daq_pressure,vid_t);
+
+
+%% Plot
+
+f = figure;
+subplot(4,1,1)
+plot(vid_t,pressure,'b')
+ylabel('Pressure (Pa)')
+grid on
+xlims = xlim;
+title(title_txt)
+
+subplot(4,1,2)
+plot(vid_t,vid_deflection,'b')
+ylabel('Deflection (microns)')
+
+subplot(4,1,3:4)
+plot(pressure,vid_deflection,'o')
+xlabel('Pressure (Pa)')
+ylabel('Deflection (microns)')
+
+
+
+
+
