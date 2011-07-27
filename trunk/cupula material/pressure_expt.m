@@ -1,0 +1,182 @@
+ function d = pressure_expt
+% Makes a pressure recording, when given a hardware trigger
+
+
+%% Parameter values
+
+sample_rate     = 10^4; % Hz
+v_min           = -4;   % V
+v_max           = 4;    % V
+long_period     = 30;   % s
+short_period    = 10;   % s
+timer_period    = 1;    % s, how often to display recording duration
+offset_period   = 2;    % s
+
+
+%% Configure DAQ 
+
+% Update status
+disp(' '); disp('Initializing DAQ . . .')
+
+% Reset daq for new recordings
+daqreset
+
+% Define daq object
+ai = analoginput('nidaq','Dev1');
+
+% Set daq settings
+set(ai,'SampleRate',sample_rate)
+ActualRate = get(ai,'SampleRate');
+set(ai,'InputType','Differential');
+
+% Configure AI channel
+ch1 = addchannel(ai,0);
+set(ch1,'InputRange',[v_min v_max])
+
+% Configure trigger & period
+set(ai,'TriggerType','manual');
+set(ai,'SamplesPerTrigger',ActualRate*offset_period);
+
+% Store parameter values
+d.off.ai_prop = set(ai);
+
+
+%% Acquire signal for offset recording
+
+% Give instructions
+disp(' '); disp(['Note: the pipette should be setup (i.e. hooked up' ...
+                ' and in the chamber, but not touching the cupula']);
+disp(' ');
+
+% Prompt for question
+answer = questdlg('Ready to record the zero pressure?',...
+                  'Zero pressure recording',...
+                  'Yes - record',...
+                  'No - input value',...
+                  'Cancel','Yes - record');
+              
+if strcmp(answer,'Yes - record')                 
+    start(ai)
+    trigger(ai)
+    wait(ai,offset_period+5)
+    d.off.volts = getdata(ai);
+    
+    disp(' ')
+    disp(['Zero pressure voltage = ' mean(d.off.volts) ' V'])
+    disp( ' ')
+    disp('Done recording zero pressure')
+    
+elseif strcmp(answer,'No - input value') 
+    answer2 = inputdlg({'Zero pressure voltage '},...
+                       'Zero pressure',1,{'3.5'});
+                   
+    d.off.volts = str2num(answer2{1});
+    
+else
+    return
+    
+end
+
+
+%% Change DAQ configuaration for long recording
+
+% Set daq settings
+set(ai,'TriggerFcn',@start_func)
+set(ai,'StopFcn',@stop_func)
+
+% Frequency that the timer function is executed
+set(ai,'TimerPeriod',timer_period)
+
+% Configure trigger & period
+set(ai,'TriggerType','HwDigital');
+set(ai,'HwDigitalTriggerSource','PFI0')
+set(ai,'TriggerCondition','PositiveEdge')
+set(ai,'SamplesPerTrigger',ActualRate*long_period);
+
+% Store parameter values
+d.long.ai_prop = set(ai);
+
+
+%% Initialize DAQ, wait for trigger
+
+% Initialize
+start(ai)
+
+% Update user
+disp(' '); disp('Waiting for trigger (long recording) . . .')
+
+% Wait for daq to finish logging (up to 5 hrs)
+wait(ai,60*60*5)
+
+% Update user
+disp('       . . . long recording completed.')
+
+% Get data and time
+d.long.volts = getdata(ai);
+d.long.t = 0:(1/ActualRate):((length(d.long.volts)-1)./ActualRate);
+
+
+%% Configure DAQ for short recording
+
+% Change period
+set(ai,'SamplesPerTrigger',ActualRate*short_period);
+
+% Store parameter values
+d.short.ai_prop = set(ai);
+
+
+%% Initialize DAQ, wait for trigger
+
+% Initialize
+start(ai)
+
+% Update user
+disp(' '); disp('Waiting for trigger (short recording) . . .')
+
+% Wait for daq to finish logging (up to 5 hrs)
+wait(ai,60*60*5)
+
+% Update user
+disp('       . . . short recording completed.')
+
+% Get data and time
+d.short.volts = getdata(ai);
+d.short.t = 0:(1/ActualRate):((length(d.short.volts)-1)./ActualRate);
+
+% Clean up
+delete(ai)
+clear ai
+
+
+%% Plot results 
+f = figure;
+%set(f,'WindowStyle','docked')
+set(0,'DefaultFigureWindowStyle','docked')
+
+subplot(2,1,1)
+plot(d.long.t,d.long.volts)
+title('Long recording')
+xlabel('time (s)')
+ylabel('voltage (V)')
+
+subplot(2,1,2)
+plot(d.short.t,d.short.volts)
+title('Short recording')
+xlabel('time (s)')
+ylabel('voltage (V)')
+
+
+%% Save data
+
+% Prompt for path
+[filename, pathname] = uiputfile('*.mat', 'Save data file');
+
+% Check for cancel
+if isequal(filename,0) || isequal(pathname,0)
+    disp('Data in the workspace, not saved')
+end
+
+% Save data
+save([pathname filesep filename],'d')
+
+
