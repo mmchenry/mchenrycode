@@ -90,6 +90,7 @@ p.drag_prod = (pi/4) * p.Cd * p.rho * (p.leg_dia/2) * p.leg_len^4;
 %p.hOut
 p.hIn/p.hOut
 
+
 %% Non-dimensionalize parameters
 
 % Constant to non-dimensionalize time
