@@ -1,7 +1,5 @@
 function d = run_simple
-% This collects parameters values, saves them to disk for the Mathematica
-% kernel to find, runs the kernel, reads the resutls from disk, and passes
-% them to the output structure 'd'. 
+% Runs a numerical simulation of the predatory strike of a mantis shrimp. 
 %
 % This code was developed for the McHenry, Claverie, Rosario & Patek (in
 % review) paper.  Parameter values correspond to Individual #2 reported in
@@ -19,7 +17,7 @@ p.rel_tol = 1e-7;
 % Precision of simulation (default = 10^-5, use 10^-7 for high precision)
 p.maxError = 10^-7;
 
-% Duration of simulation (s)
+% Maximum duration of simulation (s)
 p.simDur    = 0.02;
 
 % Maximum step size of simulation (s)
