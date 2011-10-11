@@ -1,4 +1,4 @@
-function calconst = calibrate(im)
+function calconst = calibrate(im,txt)
 % Calculates a spatial calibration constant (in units/pixel) from user 
 % selected points recorded from image of a ruler
 
@@ -15,7 +15,10 @@ end
 
 %% Interactively record distance for calibration
 figure;
+warning off
 imshow(im);
+warning on
+title(txt)
 
 set(gcf,'DoubleBuffer','on');
 disp(' '); disp(' ');
@@ -57,10 +60,13 @@ while 1 == 1
     end
     
     % Display points
+    warning off
     imshow(im);
+    warning on
     hold on
     plot(x,y,'ro-'); 
     hold off
+    title(txt)
 end
 close
 
