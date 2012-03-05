@@ -17,10 +17,19 @@ cut_freq = 0.03;
                    'All image files (*.tif, *.tiff, *.jpg)'; ...
                    '*.*','All Files (*.*)'}, ...
                    'Pick an image file');
-                                 
+if fname==0         
+    return
+end
+
 % Read & display image                                 
 im = imread([pathname filesep fname]);
 
+% Check for RGB
+if size(im,3)==3
+    error('Selected image is RGB -- save as grayscale')
+end
+
+% Create figure window
 warning off
 figure;
 imshow(im)
@@ -79,7 +88,7 @@ h2 = plot(x1,y1,'g+');
 [x2,y2,b] = ginput(1);
 
 % Store calibration points
-d.xAxis_x = [min([x1 x2]) max([x1 x2])];
+d.xAxis_x = [min([x1 x2])  max([x1 x2])];
 d.xAxis_y = [mean([y1 y2]) mean([y1 y2])];
 
 % Display calibration points
@@ -87,21 +96,22 @@ delete(h2)
 plot(d.xAxis_x,d.xAxis_y,'g-+')
 
 % Ask for actual values, units
-answer = inputdlg({'Value for x-axis range','Units for x-axis'},...
-                   'Calibration',1,{'1','ms'});
+answer = inputdlg({'Value for x-axis range (in s)'},...
+                   'Calibration',1,{'1'});
                
 % Store calibration data    
 d.calcon_x = str2num(answer{1})/range(d.xAxis_x);
-d.units_x   = answer{2};
+d.units_x   = 's';
 
 clear x1 x2 y1 y2 b h2 answer
 
 
 %% Y-axis calibration
 
-norm_y = questdlg('Is the y-axis normalized',' ','Yes','No','Yes');
+norm_y = questdlg('Y-axis scale is ',' ','Unitless','Scaled with zero',...
+                  'Scaled without zero','Unitless');
 
-if strcmp(norm_y,'No')
+if strcmp(norm_y,'Scaled with zero')
     
     % Prompt for y-axis calibration: point 1
     title('y-axis calibration: select zero and then max y-coordinate')
@@ -120,27 +130,64 @@ if strcmp(norm_y,'No')
     plot(d.yAxis_x,d.yAxis_y,'b-+')
     
     % Ask for actual values, units
-    answer = inputdlg({'Max y-axis value','Units for y-axis'},...
-        'Calibration',1,{'1','m/s'});
+    answer = inputdlg({'Max y-axis value (in m, m/s or m/s^2'},...
+        'Calibration',1,{'1'});
     
     % Store calibration data
-    d.yMax = [str2num(answer{1})];
-    d.calcon_y = d.yMax/abs(diff(d.yAxis_y));
-    d.units_y   = answer{2};
+    d.calcon_y = str2num(answer{1})/abs(diff(d.yAxis_y));
+
     
     clear x1 x2 y1 y2 b h2 answer
     
-elseif strcmp(norm_y,'Yes')
+elseif strcmp(norm_y,'Unitless')
     
     % Store calibration data
     d.calcon_y  = 1;
-    d.units_y   = 'au';
     d.yAxis_y   = [0 0];
     d.yAxis_x   = [0 0];
     d.yMax      = 1;
     
+    
+elseif strcmp(norm_y,'Scaled without zero')
+    
+    % Prompt for y-axis calibration: point 1
+    title('y-axis calibration: select two y-points')
+    [x1,y1,b] = ginput(1);
+    h2 = plot(x1,y1,'b+');
+    
+    % Prompt for y-axis calibration: point 2
+    [x2,y2,b] = ginput(1);
+    
+    % Store calibration points
+    d.yAxis_y = [y1 y2];
+    d.yAxis_x = [mean([x1 x2]) mean([x1 x2])];
+    
+    % Display calibration points
+    delete(h2)
+    plot(d.yAxis_x,d.yAxis_y,'b-+')
+    
+    % Ask for actual values, units
+    answer = inputdlg({'Value for range (in m, m/s or m/s^2'},...
+        'Calibration',1,{'1'});
+    
+    % Store calibration data
+    d.calcon_y  = str2num(answer{1})/abs(diff(d.yAxis_y));
+        
+    clear x1 x2 y1 y2 b h2 answer
+    
 else
     return
+end
+
+% Specify units
+if strcmp(norm_y,'Unitless')
+    d.units_y   = 'au';
+elseif strcmp(d.dimen,'Displacement')
+    d.units_y = 'm';
+elseif strcmp(d.dimen,'Velocity')
+    d.units_y = 'm/s';
+elseif strcmp(d.dimen,'Acceleration')
+    d.units_y = 'm/s^2';
 end
 
 
@@ -171,13 +218,22 @@ d.x_pix  = x_vals;
 d.y_pix  = y_pos;
 d.x_vals = (x_vals-min(x_vals)).*d.calcon_x;
 
-if strcmp(norm_y,'No')
-    d.y_vals = -(y_pos-d.yAxis_y(1)).*d.calcon_y;
+clear x_vals y_pos
+
+if strcmp(norm_y,'Unitless')
+    tmp      = (-d.y_pix) .* d.calcon_y;
+    d.y_vals = (tmp-mean(tmp))./range(tmp);
     
-elseif strcmp(norm_y,'Yes')
-    d.y_vals = -(y_pos-mean(y_pos))./range(y_pos);
+elseif strcmp(norm_y,'Scaled without zero')
+    tmp      = (-d.y_pix) .* d.calcon_y;
+    d.y_vals = tmp-min(tmp);
+    
+elseif strcmp(norm_y,'Scaled with zero')
+    d.y_vals = -(d.y_pix-d.yAxis_y(1)).* d.calcon_y;
 
 end
+
+clear tmp
 
 % Plot results
 figure
@@ -190,8 +246,8 @@ plot(d.x_pix,d.y_pix,'m')
 
 subplot(3,1,3)
 plot(d.x_vals,d.y_vals,'k')
-xlabel(['(' d.units_x ')'])
-ylabel(['(' d.units_y ')'])
+xlabel(['Time (' d.units_x ')'])
+ylabel([d.dimen ' (' d.units_y ')'])
 
 
 %% Save data
@@ -212,8 +268,6 @@ else
     % Save .mat file
     save([data_path filesep data_fname ' data.mat'],'d')
     
-    % Save excel file
-    csvwrite([data_path filesep data_fname '.csv'],[d.x_vals d.y_vals]);
     
 end
 
