@@ -1,4 +1,4 @@
-function [ra,rphi,ret,rv,rw,rz,rf] = nm4(f,z,E,r,h,k,n)
+function [ra,rphi,ret,rv,rw,rz,rf] = nm4(f,z,E,r,h,k_lin,n)
 % function [rv,rw,ret,ra,rphi,rz] = nm3 (w,z,E,r,h)
 % analytical single-beam superficial neuormast model
 % Sietse van Netten, Primoz Pirih, 2012
@@ -57,6 +57,10 @@ if ~exist('z');
     %z = 50e-6;
 end
 ret.z=z;
+
+if f(1)==0
+    f(1) = realmin.^(1/3);
+end
 
 %convert from frequency to angular frequency
 %match frequency and height input dimensions
@@ -215,17 +219,17 @@ for c=1:size(Minv,3);
         + C(4,1,c) .* W(4,1,c);
     
     % Calculate force on the cupula
-%     v3par1 = (2*u*(1+1i))./(w(:,:,c).*delta(:,:,c).^3) .* ...
-%                exp(-z(:,:,c).*(1+1i)./delta(:,:,c)) ;
-%     
-%     v3par2 =  C(1,1,c) .* W_f(1,1,c) ...
-%             + C(2,1,c) .* W_f(2,1,c) ...
-%             + C(3,1,c) .* W_f(3,1,c) ...
-%             + C(4,1,c) .* W_f(4,1,c);
+    v3par1 = (2*u*(1+1i))./(w(:,:,c).*delta(:,:,c).^3) .* ...
+               exp(-z(:,:,c).*(1+1i)./delta(:,:,c)) ;
+    
+    v3par2 =  C(1,1,c) .* W_f(1,1,c) ...
+            + C(2,1,c) .* W_f(2,1,c) ...
+            + C(3,1,c) .* W_f(3,1,c) ...
+            + C(4,1,c) .* W_f(4,1,c);
     
     %F(:,:,c)    =  E*I.* (v3par1 + v3par2);
     
-    %v_bun(:,:,c) =  E*I.* (v3par1 + v3par2)./ (n*k);
+    v_bun(:,:,c) =  E*I.* (v3par1 + v3par2)./ (n*k_lin);
     
 
     %numerical solution
@@ -247,7 +251,8 @@ vpar1(isnan(vpar1)) = 0;
 vpar2(isnan(vpar2)) = 0;
 
 %displacement v is a complex sum of water and cupular displacement
-v    = vpar1 + vpar2 ;
+v = v_bun;
+%v    = vpar1 + vpar2 ;
 %v_   = vpar1 + vpar2_ ;
 %v__  = vpar1 + vpar2__ ;
 %v___ = vpar1 + vpar2___ ;
